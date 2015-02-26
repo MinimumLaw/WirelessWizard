@@ -1,0 +1,7 @@
+#
+# Ignore this files
+#
+
+*.atsuo
+*/Debug
+*/Release
