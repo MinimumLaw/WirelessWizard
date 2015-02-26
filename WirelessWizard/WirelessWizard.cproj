@@ -525,9 +525,6 @@
     <Compile Include="src\Wireless\wireless_config.h">
       <SubType>compile</SubType>
     </Compile>
-    <None Include="AVR2025_User_Guide_v3.1.1.pdf">
-      <SubType>compile</SubType>
-    </None>
     <None Include="src\ASF\common\boards\board.h">
       <SubType>compile</SubType>
     </None>
