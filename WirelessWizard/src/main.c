@@ -139,7 +139,8 @@ uint8_t receive_psdu[128 + 1];
 		
 		if(frame != NULL) {
 			frame->mpdu = usb_to_wpan->body;
-			tal_tx_frame(frame, CSMA_SLOTTED, true);
+			frame->buffer_header = usb_to_wpan;
+			tal_tx_frame(frame, CSMA_UNSLOTTED, true);
 		} else {
 			/* handle no memory for RX frame - simple drop data buffer */
 			bmm_buffer_free(usb_to_wpan);
@@ -204,21 +205,19 @@ void prcm_usb_data_received(udd_ep_status_t status,
 	buffer_t *bmm_buff;
 	
 	if (status == UDD_EP_TRANSFER_OK) {
-		usb_out_buff[0] -= 2; /* FSC counted, but not received */
 		uint8_t msg_size = usb_out_buff[0];
 		bmm_buff = bmm_buffer_alloc(msg_size);
 		if(bmm_buff != NULL) {
-			memcpy(bmm_buff->body,usb_out_buff, msg_size);
+			memcpy(bmm_buff->body,usb_out_buff, nb_transfered); // FCS not received from host, but counted in length
 			qmm_queue_append(&qfUSBtWPAN, bmm_buff);
 		} else {
 			/* Handle no memory */
 		}
 	} else {
-		/* handle fail transfer - simple restart transfer 
-		udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received); */
+		/* handle fail transfer */
 	}
-	/* restart transfer 
-	udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received); */
+	/* restart transfer */
+	udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);
 }
 
 bool prcm_device_enable(void)
@@ -236,6 +235,51 @@ void prcm_device_disable(void)
 	/* Noting at this time */
 }
 
+/************************************************************************/
+/*                                                                      */
+/************************************************************************/
+
+static struct wpan_dummy_write dummy_write;
+void start_callback(void);
+void stop_callback(void);
+
+void start_callback(void) {
+	wdev->wpan_active = true;
+}
+
+void stop_callback(void) {
+	wdev->wpan_active = false;
+}
+
+static struct wpan_channel_data channel_data;
+void set_channel_callback(void);
+
+void set_channel_callback(void) {
+	// TODO (Code Writing) set channel _MUST_ be written after exchange debug
+}
+
+static struct wpan_hw_addr_filt hw_filter;
+void hw_filter_callback(void);
+
+void hw_filter_callback(void) {
+		if (hw_filter.changed & IEEE802515_AFILT_IEEEADDR_CHANGED) {
+		};
+		if (hw_filter.changed & IEEE802515_AFILT_PANC_CHANGED) {
+		};
+		if (hw_filter.changed & IEEE802515_AFILT_PANID_CHANGED) {
+		};
+		if (hw_filter.changed & IEEE802515_AFILT_SADDR_CHANGED) {
+		};
+}
+
+#define SETUP_OUT_CALLBACK(structure, function) \
+	{ \
+		udd_g_ctrlreq.payload = (uint8_t *)&structure; \
+		udd_g_ctrlreq.payload_size = udd_g_ctrlreq.req.wLength; \
+		udd_g_ctrlreq.callback = &function; \
+		ret = true; \
+	}
+
 // TODO (Code Writing) PRCM setup out handling write
 bool prcm_setup_out(void)
 {
@@ -243,12 +287,20 @@ bool prcm_setup_out(void)
 	
 	switch(udd_g_ctrlreq.req.wValue){
 		case REQ_WPAN_START:
+			if (udd_g_ctrlreq.req.wLength == sizeof(struct wpan_dummy_write))
+				SETUP_OUT_CALLBACK(dummy_write, start_callback);
 			break;
 		case REQ_WPAN_STOP:
+			if (udd_g_ctrlreq.req.wLength == sizeof(struct wpan_dummy_write))
+				SETUP_OUT_CALLBACK(dummy_write, stop_callback);
 			break;
 		case REQ_WPAN_SET_CHANNEL:
+			if (udd_g_ctrlreq.req.wLength == sizeof(struct wpan_channel_data))
+				SETUP_OUT_CALLBACK(channel_data, set_channel_callback);
 			break;
 		case REQ_WPAN_SET_HWADDR_FILT:
+			if (udd_g_ctrlreq.req.wLength == sizeof(struct wpan_hw_addr_filt))
+			SETUP_OUT_CALLBACK(hw_filter, hw_filter_callback);
 			break;
 		case REQ_WPAN_SET_HWADDR:
 			break;
