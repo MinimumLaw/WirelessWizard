@@ -235,9 +235,10 @@ void prcm_device_disable(void)
 	/* Noting at this time */
 }
 
-/************************************************************************/
-/*                                                                      */
-/************************************************************************/
+/************************************************/
+/* callback functions for device setup requests */
+/************************************************/
+// TODO (Code Writing) PRCM setup out handling write
 
 static struct wpan_dummy_write dummy_write;
 void start_callback(void);
@@ -255,22 +256,99 @@ static struct wpan_channel_data channel_data;
 void set_channel_callback(void);
 
 void set_channel_callback(void) {
-	// TODO (Code Writing) set channel _MUST_ be written after exchange debug
+	wdev->page = channel_data.page;
+	wdev->channel = channel_data.channel;
+	tal_pib_set(phyCurrentPage, (pib_value_t *)&wdev->page);
+	tal_pib_set(phyCurrentChannel, (pib_value_t *)&wdev->channel);
 }
 
 static struct wpan_hw_addr_filt hw_filter;
 void hw_filter_callback(void);
 
 void hw_filter_callback(void) {
-		if (hw_filter.changed & IEEE802515_AFILT_IEEEADDR_CHANGED) {
-		};
-		if (hw_filter.changed & IEEE802515_AFILT_PANC_CHANGED) {
-		};
-		if (hw_filter.changed & IEEE802515_AFILT_PANID_CHANGED) {
-		};
-		if (hw_filter.changed & IEEE802515_AFILT_SADDR_CHANGED) {
-		};
+	/* check all known flags */
+	if (hw_filter.changed & IEEE802515_AFILT_IEEEADDR_CHANGED) {
+		wdev->ieee_addr = hw_filter.ieee_addr;
+		tal_pib_set(macIeeeAddress, (pib_value_t *)&wdev->ieee_addr);
+	};
+	if (hw_filter.changed & IEEE802515_AFILT_PANC_CHANGED) {
+		wdev->pan_coordinator = hw_filter.pan_coordinator ? true : false;
+		tal_pib_set(mac_i_pan_coordinator,(pib_value_t *) &wdev->pan_coordinator);
+	};
+	if (hw_filter.changed & IEEE802515_AFILT_PANID_CHANGED) {
+		wdev->pan_coordinator = hw_filter.pan_id;
+		tal_pib_set(macPANId, (pib_value_t *)&wdev->pan_id);
+	};
+	if (hw_filter.changed & IEEE802515_AFILT_SADDR_CHANGED) {
+		wdev->short_addr = hw_filter.short_addr;
+		tal_pib_set(macShortAddress, (pib_value_t *)&wdev->short_addr);
+	};
+	/* clear all checked flags */
+	hw_filter.changed &= ~(IEEE802515_AFILT_IEEEADDR_CHANGED |
+		IEEE802515_AFILT_PANC_CHANGED |	IEEE802515_AFILT_PANID_CHANGED |
+		IEEE802515_AFILT_SADDR_CHANGED);
 }
+
+static uint64_t ieee_addr;
+void ieee_address_callback(void);
+
+void ieee_address_callback(void) {
+	wdev->ieee_addr = ieee_addr;
+	tal_pib_set(macIeeeAddress, (pib_value_t *)&wdev->ieee_addr);
+}
+
+static struct wpan_tx_power tx_power;
+void tx_power_callback(void);
+
+void tx_power_callback(void) {
+	wdev->tx_power = tx_power.tx_power;
+	tal_pib_set(phyTransmitPower, (pib_value_t *)&wdev->tx_power);
+}
+
+static struct wpan_lbt lbt;
+void lbt_callback(void);
+
+void lbt_callback(void) {
+	wdev->lbt_mode = lbt.mode ? true : false;
+	trx_bit_write(SR_CSMA_LBT_MODE, wdev->lbt_mode ? 1 : 0);
+}
+
+static struct wpan_cca cca;
+void cca_callback(void);
+
+void cca_callback(void) {
+	wdev->cca_mode = cca.mode;
+	tal_pib_set(phyCCAMode, (pib_value_t *)&wdev->cca_mode);
+}
+
+static struct wpan_cca_threshold cca_ed_level;
+void cca_ed_level_callback(void);
+
+void cca_ed_level_callback(void) {
+	wdev->cca_ed_level = cca_ed_level.level;
+	trx_bit_write(SR_CCA_ED_THRES, wdev->cca_ed_level);
+}
+
+static struct wpan_csma_params csma;
+void csma_callback(void);
+
+void csma_callback(void) {
+	wdev->csma_min_be = csma.min_be;
+	wdev->csma_max_be = csma.max_be;
+	wdev->csma_retries = csma.retries;
+	tal_pib_set(macMinBE, (pib_value_t *)&wdev->csma_min_be);
+	tal_pib_set(macMaxBE, (pib_value_t *)&wdev->csma_max_be);
+	tal_pib_set(macMaxFrameRetries, (pib_value_t *)&wdev->csma_retries);
+}
+
+static struct wpan_frame_retries frame_retries;
+void frame_retries_callback(void);
+
+void frame_retries_callback(void) {
+	wdev->max_frame_retries = frame_retries.count;
+	tal_pib_set(macMaxFrameRetries, (pib_value_t *)&wdev->max_frame_retries);
+}
+
 
 #define SETUP_OUT_CALLBACK(structure, function) \
 	{ \
@@ -280,7 +358,6 @@ void hw_filter_callback(void) {
 		ret = true; \
 	}
 
-// TODO (Code Writing) PRCM setup out handling write
 bool prcm_setup_out(void)
 {
 	bool ret = false;
@@ -300,21 +377,35 @@ bool prcm_setup_out(void)
 			break;
 		case REQ_WPAN_SET_HWADDR_FILT:
 			if (udd_g_ctrlreq.req.wLength == sizeof(struct wpan_hw_addr_filt))
-			SETUP_OUT_CALLBACK(hw_filter, hw_filter_callback);
+				SETUP_OUT_CALLBACK(hw_filter, hw_filter_callback);
 			break;
 		case REQ_WPAN_SET_HWADDR:
+			if (udd_g_ctrlreq.req.wLength == sizeof(ieee_addr))
+				SETUP_OUT_CALLBACK(ieee_addr, ieee_address_callback);
 			break;
 		case REQ_WPAN_SET_TXPOWER:
+			if (udd_g_ctrlreq.req.wLength == sizeof(tx_power))
+				SETUP_OUT_CALLBACK(tx_power, tx_power_callback);
 			break;
 		case REQ_WPAN_SET_LBT:
+			if (udd_g_ctrlreq.req.wLength == sizeof(lbt))
+				SETUP_OUT_CALLBACK(lbt, lbt_callback);
 			break;
 		case REQ_WPAN_SET_CCA_MODE:
+			if (udd_g_ctrlreq.req.wLength == sizeof(cca))
+				SETUP_OUT_CALLBACK(cca, cca_callback);
 			break;
 		case REQ_WPAN_SET_CCA_ED_LEVEL:
-			break;
+			if (udd_g_ctrlreq.req.wLength == sizeof(cca_ed_level))
+				SETUP_OUT_CALLBACK(cca_ed_level, cca_ed_level_callback);
+		break;
 		case REQ_WPAN_SET_CSMA_PARAMS:
+			if (udd_g_ctrlreq.req.wLength == sizeof(csma))
+				SETUP_OUT_CALLBACK(csma, csma_callback);
 			break;
 		case REQ_WPAN_SET_FRAME_RETRIES:
+			if (udd_g_ctrlreq.req.wLength == sizeof(frame_retries))
+				SETUP_OUT_CALLBACK(frame_retries, frame_retries_callback);
 			break;
 	}
 	
