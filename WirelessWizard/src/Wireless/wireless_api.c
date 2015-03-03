@@ -10,19 +10,20 @@ wpan_dev_cfg wpan_dev = {
 	.page = 17,
 	.channel = 1,
 	.tx_power = 10,
+	.wpan_active = false,
 	/* default FLAGS */
 	.flags = IEEE802154_HW_OMIT_CKSUM | IEEE802154_HW_AACK | 
 			IEEE802154_HW_TXPOWER | IEEE802154_HW_CSMA |
 			IEEE802154_HW_LBT,
 	/* default CCA params */
-	.cca_ed_level = 0x10,
+	.cca_ed_level = 0x00,
 	.cca_mode = CCA_MODE_0,
-	.max_frame_retries = 10,
+	.max_frame_retries = 0,
 	/* default CSMA params */
 	.csma_mode = CSMA_UNSLOTTED,
 	.csma_min_be = 0,
 	.csma_max_be = 0,
-	.csma_retries = 10,
+	.csma_retries = 0,
 };
 
 wpan_dev_cfg *wdev = &wpan_dev;

@@ -140,7 +140,12 @@ uint8_t receive_psdu[128 + 1];
 		if(frame != NULL) {
 			frame->mpdu = usb_to_wpan->body;
 			frame->buffer_header = usb_to_wpan;
-			tal_tx_frame(frame, CSMA_UNSLOTTED, true);
+			if (wdev->wpan_active) /* connected and stated */
+				tal_tx_frame(frame, CSMA_UNSLOTTED, true);
+			else { /* device connected, but _NOT_ started */
+				free(frame);
+				bmm_buffer_free(usb_to_wpan);
+			}
 		} else {
 			/* handle no memory for RX frame - simple drop data buffer */
 			bmm_buffer_free(usb_to_wpan);
@@ -152,7 +157,8 @@ uint8_t receive_psdu[128 + 1];
 		uint8_t usb_msg_size = wpan_to_usb->body[0] + 3; /* Frame + LQI */
 		
 		memcpy(receive_psdu, wpan_to_usb->body, usb_msg_size);
-		udi_vendor_bulk_in_run(receive_psdu, usb_msg_size, prcm_usb_data_sended);
+		if (wdev->wpan_active) /* only if host ready for data */
+			udi_vendor_bulk_in_run(receive_psdu, usb_msg_size, prcm_usb_data_sended);
 		bmm_buffer_free(wpan_to_usb);
 	}
 }
