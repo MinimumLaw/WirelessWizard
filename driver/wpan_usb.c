@@ -69,7 +69,7 @@ static void wpan_usb_receive_callback(struct urb* urb)
 	struct sk_buff		*skb;
 	uint8_t	frame_len = *((uint8_t *)urb->transfer_buffer);
 	uint8_t	*frame	= (uint8_t *)urb->transfer_buffer + 1;
-	uint8_t lqi;
+	uint8_t lqi,ed;
 
 	/* Dump received packet */
 	dev_err(&iface->dev,"Receive USB %d bytes", urb->actual_length);
@@ -95,6 +95,7 @@ static void wpan_usb_receive_callback(struct urb* urb)
 				"to long frame recv (usb) - trim!\n");
 		} else {
 			lqi = frame[frame_len];
+			ed = frame[frame_len+1];
 		}
 
 		/* allocate skb */
@@ -110,7 +111,8 @@ static void wpan_usb_receive_callback(struct urb* urb)
 		/* skip CRC in receive frame */
 		skb_trim(skb, frame_len - 2);
 
-		dev_err(&iface->dev,"SKB LQI = 0x%02X\n", lqi);
+		dev_err(&iface->dev,"SKB LQI = 0x%02X, ED = 0x%02X\n",
+			lqi, ed);
 
 		/* submitt skb to device */
 		ieee802154_rx_irqsafe(dev->wpan_dev,skb,lqi);
@@ -166,7 +168,7 @@ static int wpan_usb_start(struct ieee802154_dev *wpan_dev)
 
 	/* allocate buffer for input transfer */
 	dev->inp_buff = usb_alloc_coherent(dev->udev,
-		IEEE802154_MTU + 1, GFP_KERNEL,
+		IEEE802154_MTU + 2, GFP_KERNEL,
 		&dev->inp_urb->transfer_dma);
 
 	if(!dev->inp_buff) {
@@ -177,7 +179,7 @@ static int wpan_usb_start(struct ieee802154_dev *wpan_dev)
 
 	usb_fill_bulk_urb(dev->inp_urb, dev->udev,
 		usb_rcvbulkpipe(dev->udev, dev->inp_ep),
-		dev->inp_buff, IEEE802154_MTU + 1,
+		dev->inp_buff, IEEE802154_MTU + 2,
 		wpan_usb_receive_callback, dev);
 	dev->inp_urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 
