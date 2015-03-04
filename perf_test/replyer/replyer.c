@@ -13,6 +13,7 @@
 int main(int argc, char **argv) {
 	int sd;
 	int ret;
+	int count = 0;
 	struct sockaddr_ieee802154 a;
 
 	if (argv[1] && !strcmp(argv[1], "--version")) {
@@ -59,7 +60,10 @@ int main(int argc, char **argv) {
 			perror("read");
 		}
 
-		write(1, ".", 1);
+		if(++count == 100) { /* every 100 pkt show dot */
+			write(1, ".", 1);
+			count = 0;
+		}
 
 		ret = write(sd, &buf, ret);
 		if (ret < 0) {
