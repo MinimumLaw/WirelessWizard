@@ -72,8 +72,8 @@ static void wpan_usb_receive_callback(struct urb* urb)
 	uint8_t lqi,ed;
 
 	/* Dump received packet */
-	dev_err(&iface->dev,"Receive USB %d bytes", urb->actual_length);
-	print_hex_dump(KERN_ERR, "URB data:", DUMP_PREFIX_OFFSET,
+	dev_dbg(&iface->dev,"Receive USB %d bytes", urb->actual_length);
+	print_hex_dump(KERN_DEBUG, "URB data:", DUMP_PREFIX_OFFSET,
 		16,1, urb->transfer_buffer, urb->actual_length, 1);
 
 	/* check for usb device present */
@@ -111,7 +111,7 @@ static void wpan_usb_receive_callback(struct urb* urb)
 		/* skip CRC in receive frame */
 		skb_trim(skb, frame_len - 2);
 
-		dev_err(&iface->dev,"SKB LQI = 0x%02X, ED = 0x%02X\n",
+		dev_info(&iface->dev,"SKB LQI = 0x%02X, ED = 0x%02X\n",
 			lqi, ed);
 
 		/* submitt skb to device */
@@ -268,8 +268,8 @@ static int wpan_usb_xmit(struct ieee802154_dev *wpan_dev, struct sk_buff *skb)
 	memcpy(buff + 1, skb->data, skb->len);
 
 	/* Dump sending packet */
-	dev_err(&iface->dev,"Send SKB %d bytes", skb->len + 1);
-	print_hex_dump(KERN_ERR, "SKB data:", DUMP_PREFIX_OFFSET,
+	dev_dbg(&iface->dev,"Send SKB %d bytes", skb->len + 1);
+	print_hex_dump(KERN_DEBUG, "SKB data:", DUMP_PREFIX_OFFSET,
 		16,1, buff, skb->len + 1, 1);
 
 	/* Fill packet with additional len */
