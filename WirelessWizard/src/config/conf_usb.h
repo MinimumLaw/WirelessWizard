@@ -50,8 +50,6 @@
 #include "compiler.h"
 
 
-// TODO (Application) You must refill the following definitions with a correct values
-
 /**
  * USB Device Configuration
  * @{
@@ -72,7 +70,7 @@
 //! USB Device string definitions (Optional)
 #define  USB_DEVICE_MANUFACTURE_NAME      "OAO Radioavionica"
 #define  USB_DEVICE_PRODUCT_NAME          "PRCM module AT86RF212B 900MHz"
-#define  USB_DEVICE_SERIAL_NAME           "250215-01"
+#define  USB_DEVICE_SERIAL_NAME           "050315-01"
 
 /**
  * Device speeds support

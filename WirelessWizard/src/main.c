@@ -55,13 +55,10 @@
 #include "tal.h"
 #include "wireless_api.h"
 
+#include <tal_internal.h>
+#include <tal_pib.h>
+
 /* === PROTOTYPES ====================================================== */
-
-/**
- * \brief Application init
- */
-static void app_init(void);
-
 
 /**
  * \brief Application task
@@ -87,7 +84,7 @@ int main(void)
 	/*The Modules selected in the wizard are initialized here */
 	modules_init();
 
-	app_init();
+	udc_attach(); /* attach to USB bus at end of initialization */
 
 	while (1)
 	{
@@ -101,24 +98,13 @@ int main(void)
 
 queue_t	qfUSBtWPAN,qfWPANtUSB;
 
-/**
- * \brief Application init
- */
- void app_init(void)
-{
-	qmm_queue_init(&qfUSBtWPAN);
-	qmm_queue_init(&qfWPANtUSB);
-}
-
-
-// TODO (Code Writing) USB data send callback write
 void prcm_usb_data_sended(udd_ep_status_t status,
 			iram_size_t nb_transfered, udd_ep_id_t ep)
 {
 	if(UDD_EP_TRANSFER_OK == status) {
-		/* Handle success send frame to host */
+		/* TODO Handle success send usb frame to host */
 	} else {
-		/* Handle unsuccess send frame to host */
+		/* TODO Handle unsuccess send usb frame to host */
 	}
 }
 
@@ -141,13 +127,15 @@ uint8_t receive_psdu[128 + 1];
 			frame->mpdu = usb_to_wpan->body;
 			frame->buffer_header = usb_to_wpan;
 			if (wdev->wpan_active) /* connected and stated */
-				tal_tx_frame(frame, CSMA_UNSLOTTED, true);
+				tal_tx_frame(frame, wdev->csma_mode,
+						wdev->max_frame_retries == 0 ? false : true);
 			else { /* device connected, but _NOT_ started */
 				free(frame);
 				bmm_buffer_free(usb_to_wpan);
 			}
 		} else {
-			/* handle no memory for RX frame - simple drop data buffer */
+			/* TODO handle no memory for RX frame */
+			/* This time - simple drop data buffer */
 			bmm_buffer_free(usb_to_wpan);
 		}
 	}
@@ -217,10 +205,10 @@ void prcm_usb_data_received(udd_ep_status_t status,
 			memcpy(bmm_buff->body,usb_out_buff, nb_transfered); // FCS not received from host, but counted in length
 			qmm_queue_append(&qfUSBtWPAN, bmm_buff);
 		} else {
-			/* Handle no memory */
+			/* TODO Handle no memory for usb input buffer */
 		}
 	} else {
-		/* handle fail transfer */
+		/* TODO handle usb input fail transfer */
 	}
 	/* restart transfer */
 	udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);
@@ -228,33 +216,43 @@ void prcm_usb_data_received(udd_ep_status_t status,
 
 bool prcm_device_enable(void)
 {
-	/* start receive with default params */
-	init_data_reception();
+	qmm_queue_init(&qfUSBtWPAN);
+	qmm_queue_init(&qfWPANtUSB);
 	
+	init_default_pib();
+
 	udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);
 	return true;
 }
 
-// TODO (Code Writing) Disable USB device callback write
 void prcm_device_disable(void)
 {
-	/* Noting at this time */
+	buffer_t *tmp;
+
+	/* purge all queues */
+	while((tmp = qmm_queue_remove(&qfUSBtWPAN, NULL)) != NULL)
+		bmm_buffer_free(tmp);
+	while((tmp = qmm_queue_remove(&qfWPANtUSB, NULL)) != NULL)
+		bmm_buffer_free(tmp);
 }
 
 /************************************************/
 /* callback functions for device setup requests */
 /************************************************/
-// TODO (Code Writing) PRCM setup out handling write
 
 static struct wpan_dummy_write dummy_write;
 void start_callback(void);
 void stop_callback(void);
 
 void start_callback(void) {
+	/*RX_AACK_ON Mode is enabled if Promiscuous Mode is not used,else RX is switched on in RX_ON Mode*/
+	while(tal_rx_enable(PHY_RX_ON) != RX_ON);
 	wdev->wpan_active = true;
 }
 
 void stop_callback(void) {
+	/*Disable WPAN transfers*/
+	set_trx_state(CMD_TRX_OFF);
 	wdev->wpan_active = false;
 }
 
@@ -262,8 +260,9 @@ static struct wpan_channel_data channel_data;
 void set_channel_callback(void);
 
 void set_channel_callback(void) {
-	wdev->page = channel_data.page;
-	wdev->channel = channel_data.channel;
+	/* TODO linux-wireleess at this moment not set page, only channel. Need fixing */
+//	wdev->page = channel_data.page;
+//	wdev->channel = channel_data.channel;
 	tal_pib_set(phyCurrentPage, (pib_value_t *)&wdev->page);
 	tal_pib_set(phyCurrentChannel, (pib_value_t *)&wdev->channel);
 }
@@ -282,7 +281,7 @@ void hw_filter_callback(void) {
 		tal_pib_set(mac_i_pan_coordinator,(pib_value_t *) &wdev->pan_coordinator);
 	};
 	if (hw_filter.changed & IEEE802515_AFILT_PANID_CHANGED) {
-		wdev->pan_coordinator = hw_filter.pan_id;
+		wdev->pan_id = hw_filter.pan_id;
 		tal_pib_set(macPANId, (pib_value_t *)&wdev->pan_id);
 	};
 	if (hw_filter.changed & IEEE802515_AFILT_SADDR_CHANGED) {
@@ -307,7 +306,8 @@ static struct wpan_tx_power tx_power;
 void tx_power_callback(void);
 
 void tx_power_callback(void) {
-	wdev->tx_power = tx_power.tx_power;
+	/* TODO linux-wireleess at this moment set tx-power to 0dBm, need fixing */
+//	wdev->tx_power = tx_power.tx_power;
 	tal_pib_set(phyTransmitPower, (pib_value_t *)&wdev->tx_power);
 }
 
@@ -332,7 +332,9 @@ void cca_ed_level_callback(void);
 
 void cca_ed_level_callback(void) {
 	wdev->cca_ed_level = cca_ed_level.level;
+#ifdef CCA_ED_THRESHOLD
 	trx_bit_write(SR_CCA_ED_THRES, wdev->cca_ed_level);
+#endif // CCA_ED_THRESHOLD
 }
 
 static struct wpan_csma_params csma;
@@ -344,7 +346,7 @@ void csma_callback(void) {
 	wdev->csma_retries = csma.retries;
 	tal_pib_set(macMinBE, (pib_value_t *)&wdev->csma_min_be);
 	tal_pib_set(macMaxBE, (pib_value_t *)&wdev->csma_max_be);
-	tal_pib_set(macMaxFrameRetries, (pib_value_t *)&wdev->csma_retries);
+	tal_pib_set(macMaxCSMABackoffs, (pib_value_t *)&wdev->csma_retries);
 }
 
 static struct wpan_frame_retries frame_retries;
@@ -368,7 +370,7 @@ bool prcm_setup_out(void)
 {
 	bool ret = false;
 	
-	switch(udd_g_ctrlreq.req.wValue){
+	switch(udd_g_ctrlreq.req.wValue) {
 		case REQ_WPAN_START:
 			if (udd_g_ctrlreq.req.wLength == sizeof(struct wpan_dummy_write))
 				SETUP_OUT_CALLBACK(dummy_write, start_callback);

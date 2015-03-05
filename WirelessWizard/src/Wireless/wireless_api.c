@@ -1,15 +1,17 @@
 #include "wireless_api.h"
 #include "wireless_config.h"
 
+#include <tal_constants.h>
+
 wpan_dev_cfg wpan_dev = {
 	/* default basic IEEE 802.15.4 params */
 	.ieee_addr = 0xCAFEBABEDEADBEAF,
-	.short_addr = 0x0001,
-	.pan_id = 0x1234,
-	.pan_coordinator = false,
-	.page = 17,
-	.channel = 1,
-	.tx_power = 10,
+	.short_addr = TAL_SHORT_ADDRESS_DEFAULT,
+	.pan_id = TAL_PANID_BC_DEFAULT,
+	.pan_coordinator = TAL_PAN_COORDINATOR_DEFAULT,
+	.page = 17, /* Fixed value: see TODO list */
+	.channel = 1, /* Fixed value: see TODO list */
+	.tx_power = 10, /* Fixed value: see TODO list */
 	.wpan_active = false,
 	/* default FLAGS */
 	.flags = IEEE802154_HW_OMIT_CKSUM | IEEE802154_HW_AACK | 
@@ -17,13 +19,13 @@ wpan_dev_cfg wpan_dev = {
 			IEEE802154_HW_LBT,
 	/* default CCA params */
 	.cca_ed_level = 0x00,
-	.cca_mode = CCA_MODE_0,
-	.max_frame_retries = 0,
+	.cca_mode = TAL_CCA_MODE_DEFAULT,
+	.max_frame_retries = TAL_MAXFRAMERETRIES_DEFAULT,
 	/* default CSMA params */
 	.csma_mode = CSMA_UNSLOTTED,
-	.csma_min_be = 0,
-	.csma_max_be = 0,
-	.csma_retries = 0,
+	.csma_min_be = TAL_MINBE_DEFAULT,
+	.csma_max_be = TAL_MAXBE_DEFAULT,
+	.csma_retries = TAL_MAX_CSMA_BACKOFFS_DEFAULT,
 };
 
 wpan_dev_cfg *wdev = &wpan_dev;
@@ -36,16 +38,6 @@ void wireless_init(void)
 	sysclk_init();
 	board_init();
 	sw_timer_init();
-	
-	channel_page_support[0] = 0x003FF;
-	channel_page_support[2] = 0x003FF;
-	channel_page_support[5] = 0x003FF;
-#ifdef HIGH_DATA_RATE_SUPPORT
-	channel_page_support[16] = 0x003FF;
-	channel_page_support[17] = 0x003FF;
-	channel_page_support[18] = 0x003FF;
-	channel_page_support[19] = 0x003FF;
-#endif // HIGH_DATA_RATE_SUPPORT
 
 	/*Initialize the TAL Layer*/
 	if(tal_init()!= MAC_SUCCESS) {
@@ -54,8 +46,19 @@ void wireless_init(void)
 	cpu_irq_enable();
 }
 
-void init_data_reception()
+void init_default_pib(void)
 {
+	/* supported chanell/pages */
+	channel_page_support[0] = 0x007FF;
+	channel_page_support[2] = 0x007FF;
+	channel_page_support[5] = 0x007FF;
+#ifdef HIGH_DATA_RATE_SUPPORT
+	channel_page_support[16] = 0x007FF;
+	channel_page_support[17] = 0x007FF;
+	channel_page_support[18] = 0x007FF;
+	channel_page_support[19] = 0x007FF;
+#endif // HIGH_DATA_RATE_SUPPORT
+
 	tal_pib_set(macIeeeAddress, (pib_value_t *)&wdev->ieee_addr);
 	tal_pib_set(macShortAddress, (pib_value_t *)&wdev->short_addr);
 	tal_pib_set(macPANId, (pib_value_t *)&wdev->pan_id);
@@ -63,10 +66,13 @@ void init_data_reception()
 	tal_pib_set(phyCurrentPage,(pib_value_t *)&wdev->page);
 	tal_pib_set(phyCurrentChannel, (pib_value_t *)&wdev->channel);
 	
+	tal_pib_set(phyCCAMode,(pib_value_t *)&wdev->cca_mode);
+	tal_pib_set(macMaxFrameRetries, (pib_value_t *)&wdev->max_frame_retries);
+
 	uint8_t temp_var = CONV_DBM_TO_phyTransmitPower(wdev->tx_power);
 	tal_pib_set(phyTransmitPower, (pib_value_t *)&temp_var);
 
-	#if (ANTENNA_DIVERSITY == 1)
+#if (ANTENNA_DIVERSITY == 1)
 	if(ENABLE_ANTENNA_DIVERSITY)
 	{
 		tal_ant_div_config(ANT_DIVERSITY_ENABLE,ANTENNA_DEFAULT);
@@ -75,20 +81,15 @@ void init_data_reception()
 	{
 		tal_ant_div_config(ANT_DIVERSITY_DISABLE,ANT_SELECT);
 	}
-	#endif
+#endif
 
-    /*Enable Promiscuous Mode pib attribute to put the transceiver in RX_ON mode.*/
-    #ifdef PROMISCUOUS_MODE
-		bool mode = true;
-		tal_rxaack_prom_mode_ctrl(true);
-		tal_pib_set(macPromiscuousMode, (pib_value_t *)&mode);
-	#endif
-    
-	/*RX_AACK_ON Mode is enabled if Promiscuous Mode is not used,else RX is switched on in RX_ON Mode*/
-    tal_rx_enable(PHY_RX_ON); 
+	/*Enable Promiscuous Mode pib attribute to put the transceiver in RX_ON mode.*/
+#ifdef PROMISCUOUS_MODE
+	bool mode = true;
+	tal_rxaack_prom_mode_ctrl(true);
+	tal_pib_set(macPromiscuousMode, (pib_value_t *)&mode);
+#endif
 }
-
-
 
 /**
  *
@@ -98,12 +99,7 @@ void init_data_reception()
  */
 void app_alert(void)
 {
-	/* Indicate error - flash an LED */
-	
-	while(1)
-	{
-		//led_toggle();
-		//delay_ms(100);
+	while(1) { /* freezee and wait for watchdog reset */
 	}
 	
 }

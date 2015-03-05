@@ -214,7 +214,7 @@ struct __attribute__((packed)) wpan_csma_params {
 
 
 void wireless_init(void);
-void init_data_reception(void);
+void init_default_pib(void);
 void app_alert(void);
 
 #endif /* WIRELESS_API_H_ */

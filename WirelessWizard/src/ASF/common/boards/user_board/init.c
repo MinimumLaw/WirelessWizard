@@ -80,5 +80,4 @@ void modules_init(void)
 {
 	udc_reset();
 	udc_start();
-	udc_attach();
 }
