@@ -73,8 +73,10 @@ static void wpan_usb_receive_callback(struct urb* urb)
 
 	/* Dump received packet */
 	dev_dbg(&iface->dev,"Receive USB %d bytes", urb->actual_length);
+#ifdef _DUMP_SKB_AND_URB_
 	print_hex_dump(KERN_DEBUG, "URB data:", DUMP_PREFIX_OFFSET,
 		16,1, urb->transfer_buffer, urb->actual_length, 1);
+#endif /* _DUMP_SKB_AND_URB_ */
 
 	/* check for usb device present */
 	if(!atomic_read(&dev->usb_active))
@@ -269,8 +271,10 @@ static int wpan_usb_xmit(struct ieee802154_dev *wpan_dev, struct sk_buff *skb)
 
 	/* Dump sending packet */
 	dev_dbg(&iface->dev,"Send SKB %d bytes", skb->len + 1);
+#ifdef _DUMP_SKB_AND_URB_
 	print_hex_dump(KERN_DEBUG, "SKB data:", DUMP_PREFIX_OFFSET,
 		16,1, buff, skb->len + 1, 1);
+#endif /* _DUMP_SKB_AND_URB_ */
 
 	/* Fill packet with additional len */
 	usb_fill_bulk_urb(dev->out_urb, dev->udev,
