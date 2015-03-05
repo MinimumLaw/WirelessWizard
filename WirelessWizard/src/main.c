@@ -65,10 +65,8 @@
  */
 static void app_task(void);
 
-void prcm_usb_data_sended(udd_ep_status_t status,
-iram_size_t nb_transfered, udd_ep_id_t ep);
 void prcm_usb_data_received(udd_ep_status_t status,
-iram_size_t nb_transfered, udd_ep_id_t ep);
+	iram_size_t nb_transfered, udd_ep_id_t ep);
 
 
 /* === IMPLEMENTATION ====================================================== */
@@ -97,16 +95,6 @@ int main(void)
 }
 
 queue_t	qfUSBtWPAN,qfWPANtUSB;
-
-void prcm_usb_data_sended(udd_ep_status_t status,
-			iram_size_t nb_transfered, udd_ep_id_t ep)
-{
-	if(UDD_EP_TRANSFER_OK == status) {
-		/* TODO Handle success send usb frame to host */
-	} else {
-		/* TODO Handle unsuccess send usb frame to host */
-	}
-}
 
 /**
  * \brief Application task
@@ -146,7 +134,8 @@ uint8_t receive_psdu[128 + 1];
 		
 		memcpy(receive_psdu, wpan_to_usb->body, usb_msg_size);
 		if (wdev->wpan_active) /* only if host ready for data */
-			udi_vendor_bulk_in_run(receive_psdu, usb_msg_size, prcm_usb_data_sended);
+			/* TODO: This time _NOT_ handle error on USB data send to host */
+			udi_vendor_bulk_in_run(receive_psdu, usb_msg_size, NULL);
 		bmm_buffer_free(wpan_to_usb);
 	}
 }
@@ -205,10 +194,13 @@ void prcm_usb_data_received(udd_ep_status_t status,
 			memcpy(bmm_buff->body,usb_out_buff, nb_transfered); // FCS not received from host, but counted in length
 			qmm_queue_append(&qfUSBtWPAN, bmm_buff);
 		} else {
-			/* TODO Handle no memory for usb input buffer */
+			/* TODO (IN PROCESS) Handle no memory for USB input buffer */
+			/* Send NAK: Say: "Host sorry, data received but not handled now. Try again later" */
+			udd_ep_abort(ep);
 		}
 	} else {
 		/* TODO handle usb input fail transfer */
+		/* This time - ignore and restart transfer */
 	}
 	/* restart transfer */
 	udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);
