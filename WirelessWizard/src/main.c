@@ -310,7 +310,8 @@ static struct wpan_lbt lbt;
 void lbt_callback(void);
 
 void lbt_callback(void) {
-	wdev->lbt_mode = lbt.mode ? true : false;
+	/* TODO Khmm... May be set, but disabled for preasure */
+//	wdev->lbt_mode = lbt.mode ? true : false;
 	trx_bit_write(SR_CSMA_LBT_MODE, wdev->lbt_mode ? 1 : 0);
 }
 

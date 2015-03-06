@@ -12,6 +12,7 @@ wpan_dev_cfg wpan_dev = {
 	.page = 17, /* Fixed value: see TODO list */
 	.channel = 1, /* Fixed value: see TODO list */
 	.tx_power = 10, /* Fixed value: see TODO list */
+	.lbt_mode = true, /* Fixed value: see TODO list*/
 	.wpan_active = false,
 	/* default FLAGS */
 	.flags = IEEE802154_HW_OMIT_CKSUM | IEEE802154_HW_AACK | 
@@ -68,6 +69,8 @@ void init_default_pib(void)
 	
 	tal_pib_set(phyCCAMode,(pib_value_t *)&wdev->cca_mode);
 	tal_pib_set(macMaxFrameRetries, (pib_value_t *)&wdev->max_frame_retries);
+
+	trx_bit_write(SR_CSMA_LBT_MODE, wdev->lbt_mode ? 1 : 0);
 
 	uint8_t temp_var = CONV_DBM_TO_phyTransmitPower(wdev->tx_power);
 	tal_pib_set(phyTransmitPower, (pib_value_t *)&temp_var);
