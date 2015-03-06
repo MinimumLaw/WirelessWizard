@@ -94,7 +94,7 @@ int main(void)
 	}
 }
 
-queue_t	qfUSBtWPAN,qfWPANtUSB;
+queue_t	qfWPANtUSB;
 
 /**
  * \brief USB data receive callback
@@ -109,14 +109,43 @@ iram_size_t nb_transfered, udd_ep_id_t ep)
 		uint8_t msg_size = usb_out_buff[0];
 		bmm_buff = bmm_buffer_alloc(msg_size);
 		if(bmm_buff != NULL) {
-			memcpy(bmm_buff->body,usb_out_buff, nb_transfered); // FCS not received from host, but counted in length
-			qmm_queue_append(&qfUSBtWPAN, bmm_buff);
+			frame_info_t *frame;
+
+			frame = malloc(sizeof(frame_info_t));
+			if(frame != NULL) {
+				/* Frame and buffer allocated */
+				memcpy(bmm_buff->body,usb_out_buff, nb_transfered); // FCS not received from host, but counted in length
+				frame->mpdu = bmm_buff->body;
+				frame->buffer_header = bmm_buff;
+				if (wdev->wpan_active) { /* connected and stated */
+					if (TAL_BUSY == tal_tx_frame(frame, wdev->csma_mode,
+							wdev->max_frame_retries == 0 ? false : true) ) {
+						/* TODO: Handle frame prepared, but TAL busy */
+						/* This time clean and restart transfer */
+						free(frame);
+						bmm_buffer_free(bmm_buff);
+						udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);	
+					};
+				} else { /* device connected, but _NOT_ started */
+					free(frame);
+					bmm_buffer_free(bmm_buff);
+					udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);					
+				};
+			} else {
+				/* TODO: Handle transfer OK, but no memory for frame */
+				/* free buffer and restart transfer */
+				bmm_buffer_free(bmm_buff);
+				udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);
+			};
 		} else {
-			/* TODO Handle no memory for USB input buffer */
+			/* TODO Handle transfer OK, but no memory for USB input buffer */
+			/* This time - restart transfer */
+			udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);
 		}
 	} else {
 		/* TODO handle usb input fail transfer */
-		/* This time - ignore and restart transfer */
+		/* This time - restart transfer */
+		udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);
 	}
 }
 
@@ -126,31 +155,7 @@ iram_size_t nb_transfered, udd_ep_id_t ep)
 uint8_t receive_psdu[128 + 1];
  void app_task(void)
 {
-	buffer_t *usb_to_wpan;
 	buffer_t *wpan_to_usb;
-	
-	usb_to_wpan = qmm_queue_remove(&qfUSBtWPAN, NULL);
-	if(usb_to_wpan != NULL) {
-		frame_info_t *frame;
-		
-		frame = malloc(sizeof(frame_info_t));
-		
-		if(frame != NULL) {
-			frame->mpdu = usb_to_wpan->body;
-			frame->buffer_header = usb_to_wpan;
-			if (wdev->wpan_active) /* connected and stated */
-				tal_tx_frame(frame, wdev->csma_mode,
-						wdev->max_frame_retries == 0 ? false : true);
-			else { /* device connected, but _NOT_ started */
-				free(frame);
-				bmm_buffer_free(usb_to_wpan);
-			}
-		} else {
-			/* TODO handle no memory for RX frame */
-			/* This time - simple drop data buffer */
-			bmm_buffer_free(usb_to_wpan);
-		}
-	}
 	
 	wpan_to_usb = qmm_queue_remove(&qfWPANtUSB, NULL);
 	if(wpan_to_usb != NULL) {
@@ -209,7 +214,6 @@ void tal_rx_frame_cb(frame_info_t *frame)
 
 bool prcm_device_enable(void)
 {
-	qmm_queue_init(&qfUSBtWPAN);
 	qmm_queue_init(&qfWPANtUSB);
 	
 	init_default_pib();
@@ -222,8 +226,6 @@ void prcm_device_disable(void)
 	buffer_t *tmp;
 
 	/* purge all queues */
-	while((tmp = qmm_queue_remove(&qfUSBtWPAN, NULL)) != NULL)
-		bmm_buffer_free(tmp);
 	while((tmp = qmm_queue_remove(&qfWPANtUSB, NULL)) != NULL)
 		bmm_buffer_free(tmp);
 }
