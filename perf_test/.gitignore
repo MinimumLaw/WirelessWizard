@@ -1,5 +1,7 @@
 sender/*.o
 sender/sender
+sender/sendbulk
 
 replyer/*.o
 replyer/replyer
+replyer/receiver
