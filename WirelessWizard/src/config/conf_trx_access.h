@@ -78,7 +78,7 @@
 		/** This macro restores the transceiver interrupt status. */
 	#define LEAVE_TRX_REGION()   PORTC.INTCTRL = irq_mask; }
 
-	#define AT86RFX_SPI_BAUDRATE         (3000000)
+	#define AT86RFX_SPI_BAUDRATE         (6000000)
 	/* ! @} */
 
 #endif // CONF_TRX_ACCESS_H_INCLUDED
