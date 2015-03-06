@@ -58,7 +58,7 @@
 //#define CONFIG_PLL0_SOURCE          PLL_SRC_RC32MHZ
 
 /* Fpll = (Fclk * PLL_mul) / PLL_div */
-#define CONFIG_PLL0_MUL             23
+#define CONFIG_PLL0_MUL             22
 #define CONFIG_PLL0_DIV             1
 
 /* External oscillator frequency range */
