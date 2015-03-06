@@ -97,6 +97,30 @@ int main(void)
 queue_t	qfUSBtWPAN,qfWPANtUSB;
 
 /**
+ * \brief USB data receive callback
+ */
+uint8_t usb_out_buff[128];
+void prcm_usb_data_received(udd_ep_status_t status,
+iram_size_t nb_transfered, udd_ep_id_t ep)
+{
+	buffer_t *bmm_buff;
+
+	if (status == UDD_EP_TRANSFER_OK) {
+		uint8_t msg_size = usb_out_buff[0];
+		bmm_buff = bmm_buffer_alloc(msg_size);
+		if(bmm_buff != NULL) {
+			memcpy(bmm_buff->body,usb_out_buff, nb_transfered); // FCS not received from host, but counted in length
+			qmm_queue_append(&qfUSBtWPAN, bmm_buff);
+		} else {
+			/* TODO Handle no memory for USB input buffer */
+		}
+	} else {
+		/* TODO handle usb input fail transfer */
+		/* This time - ignore and restart transfer */
+	}
+}
+
+/**
  * \brief Application task
  */
 uint8_t receive_psdu[128 + 1];
@@ -154,6 +178,8 @@ void tal_tx_frame_done_cb(retval_t status, frame_info_t *frame)
 	bmm_buffer_free(frame->buffer_header);
 	// Free-up allocated frame_info_t* structure
 	free(frame);
+	// restart USB packet receive
+	udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);
 }
 
 /**
@@ -181,31 +207,6 @@ void tal_rx_frame_cb(frame_info_t *frame)
 	bmm_buffer_free(frame->buffer_header);
 }
 
-uint8_t usb_out_buff[128];
-void prcm_usb_data_received(udd_ep_status_t status,
-				iram_size_t nb_transfered, udd_ep_id_t ep)
-{
-	buffer_t *bmm_buff;
-	
-	if (status == UDD_EP_TRANSFER_OK) {
-		uint8_t msg_size = usb_out_buff[0];
-		bmm_buff = bmm_buffer_alloc(msg_size);
-		if(bmm_buff != NULL) {
-			memcpy(bmm_buff->body,usb_out_buff, nb_transfered); // FCS not received from host, but counted in length
-			qmm_queue_append(&qfUSBtWPAN, bmm_buff);
-		} else {
-			/* TODO (IN PROCESS) Handle no memory for USB input buffer */
-			/* Send NAK: Say: "Host sorry, data received but not handled now. Try again later" */
-			udd_ep_abort(ep);
-		}
-	} else {
-		/* TODO handle usb input fail transfer */
-		/* This time - ignore and restart transfer */
-	}
-	/* restart transfer */
-	udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);
-}
-
 bool prcm_device_enable(void)
 {
 	qmm_queue_init(&qfUSBtWPAN);
@@ -213,7 +214,6 @@ bool prcm_device_enable(void)
 	
 	init_default_pib();
 
-	udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);
 	return true;
 }
 
@@ -239,6 +239,7 @@ void stop_callback(void);
 void start_callback(void) {
 	/*RX_AACK_ON Mode is enabled if Promiscuous Mode is not used,else RX is switched on in RX_ON Mode*/
 	while(tal_rx_enable(PHY_RX_ON) != RX_ON);
+	udi_vendor_bulk_out_run(usb_out_buff, sizeof(usb_out_buff),&prcm_usb_data_received);
 	wdev->wpan_active = true;
 }
 
