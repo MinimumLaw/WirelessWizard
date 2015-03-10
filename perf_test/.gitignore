@@ -1,7 +1,11 @@
-sender/*.o
-sender/sender
-sender/sendbulk
+beaconer/*.o
+beaconer/beaconer
 
 replyer/*.o
 replyer/replyer
 replyer/receiver
+
+sender/*.o
+sender/sender
+sender/sendbulk
+
