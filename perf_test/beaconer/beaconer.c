@@ -29,7 +29,7 @@ void* send_beacon_pthread( void* arg )
 {
 	int ret;
 	while(1) {
-		sprintf(out_short,"s[%10ld]\n",out_counter);
+		sprintf(out_short,"s[%010ld]\n",out_counter);
 		ret = write(sd,&out_short,SHORT_SIZE);
 		if (ret < 0) {
 			perror("write");
@@ -38,7 +38,7 @@ void* send_beacon_pthread( void* arg )
 		fprintf(stdout,"S> %s", out_short);
 		sleep(1);
 
-		sprintf(out_medium,"m[%10ld]\n",out_counter);
+		sprintf(out_medium,"m[%010ld]\n",out_counter);
 		ret = write(sd,&out_medium,MEDIUM_SIZE);
 		if (ret < 0) {
 			perror("write");
@@ -47,7 +47,7 @@ void* send_beacon_pthread( void* arg )
 		fprintf(stdout,"M> %s", out_medium);
 		sleep(1);
 
-		sprintf(out_large,"l[%10ld]\n",out_counter);
+		sprintf(out_large,"l[%010ld]\n",out_counter);
 		ret = write(sd,&out_large,LARGE_SIZE);
 		if (ret < 0) {
 			perror("write");
@@ -116,16 +116,16 @@ int main(int argc, char **argv) {
 		}
 		switch(ret){
 			case LARGE_SIZE:
-				fprintf(stdout,"L< %s",in_buffer);
+				fprintf(stdout,"\t\t\t\tL< %s",in_buffer);
 				break;
 			case MEDIUM_SIZE:
-				fprintf(stdout,"M< %s",in_buffer);
+				fprintf(stdout,"\t\t\t\tM< %s",in_buffer);
 				break;
 			case SHORT_SIZE:
-				fprintf(stdout,"S< %s",in_buffer);
+				fprintf(stdout,"\t\t\t\tS< %s",in_buffer);
 				break;
 			default:
-				fprintf(stdout,"?< %s",in_buffer);
+				fprintf(stdout,"\t\t\t\t?< %s",in_buffer);
 				break;
 		}
 
