@@ -17,9 +17,9 @@
 /* network device specific */
 #include <linux/skbuff.h>
 /* IEEE802.15.4 specific */
-#include <net/ieee802154.h>
+#include <linux/ieee802154.h>
 #include <net/mac802154.h>
-#include <net/wpan-phy.h>
+#include <net/cfg802154.h>
 /* local device data */
 #include "wpan_usb.h"
 
@@ -117,7 +117,7 @@ static void wpan_usb_receive_callback(struct urb* urb)
 			lqi, ed);
 
 		/* submitt skb to device */
-		ieee802154_rx_irqsafe(dev->wpan_dev,skb,lqi);
+		ieee802154_rx_irqsafe(dev->wpan_hw,skb,lqi);
 	} else
 		dev_err(&iface->dev,
 			"Error receive wpan data frame USB!\n");
@@ -136,9 +136,9 @@ restart_transfer:
 
 /* start: Handler that 802.15.4 module calls for device initialization.
     This function is called before the first interface is attached. */
-static int wpan_usb_start(struct ieee802154_dev *wpan_dev)
+static int wpan_usb_start(struct ieee802154_hw *wpan_hw)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
 	struct wpan_dummy_write	dummy;
@@ -194,9 +194,9 @@ static int wpan_usb_start(struct ieee802154_dev *wpan_dev)
 
 /* stop:Handler that 802.15.4 module calls for device cleanup.
     This function is called after the last interface is removed. */
-static void wpan_usb_stop(struct ieee802154_dev *wpan_dev)
+static void wpan_usb_stop(struct ieee802154_hw *wpan_hw)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
 	struct wpan_dummy_write	dummy;
@@ -238,9 +238,9 @@ static void usb_write_cb(struct urb *urb)
 	configuration.
 	This function should return zero or negative errno. Called with
 	pib_lock held. */
-static int wpan_usb_xmit(struct ieee802154_dev *wpan_dev, struct sk_buff *skb)
+static int wpan_usb_xmit(struct ieee802154_hw *wpan_hw, struct sk_buff *skb)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	int 			retval;
 	char* 			buff;
@@ -310,9 +310,9 @@ buff_error:
 	This function should place the value for detected energy
 	(usually device-dependant) in the level pointer and return
 	either zero or negative errno. Called with pib_lock held. */
-static int wpan_usb_ed(struct ieee802154_dev *wpan_dev, u8* level)
+static int wpan_usb_ed(struct ieee802154_hw *wpan_hw, u8* level)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
 	int ret;
@@ -336,10 +336,10 @@ static int wpan_usb_ed(struct ieee802154_dev *wpan_dev, u8* level)
 	Set radio for listening on specific channel.
 	Set the device for listening on specified channel.
 	Returns either zero, or negative errno. Called with pib_lock held. */
-static int wpan_usb_set_channel(struct ieee802154_dev *wpan_dev,
-				int page, int channel)
+static int wpan_usb_set_channel(struct ieee802154_hw *wpan_hw,
+				uint8_t page, uint8_t channel)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
 	struct wpan_channel_data set_channel;
@@ -367,18 +367,18 @@ static int wpan_usb_set_channel(struct ieee802154_dev *wpan_dev,
 	Set radio for listening on specific address.
 	Set the device for listening on specified address.
 	Returns either zero, or negative errno. */
-static int wpan_usb_set_hw_addr_filt(struct ieee802154_dev *wpan_dev,
+static int wpan_usb_set_hw_addr_filt(struct ieee802154_hw *wpan_hw,
 				struct ieee802154_hw_addr_filt *filt,
 				unsigned long changed)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
 	struct wpan_hw_addr_filt filter;
 	int ret;
 
 	filter.changed = changed;
-	filter.ieee_addr = filt->ieee_addr;
+	filter.extended_addr = filt->ieee_addr;
 	filter.short_addr = filt->short_addr;
 	filter.pan_id = filt->pan_id;
 	filter.pan_coordinator = filt->pan_coord;
@@ -399,38 +399,12 @@ static int wpan_usb_set_hw_addr_filt(struct ieee802154_dev *wpan_dev,
 	return 0;
 }
 
-/* ieee_addr:
-	FixMe: more info about this helper. M.B. set hw (ieee) address???
-	Returns either zero, or negative errno. */
-static int wpan_usb_ieee_addr(struct ieee802154_dev *wpan_dev, __le64 addr)
-{
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
-	struct usb_interface	*iface = dev->iface;
-	struct usb_device	*udev = dev->udev;
-	int ret;
-
-	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
-		0,		/* bReqiest */
-		CTRL_VENDOR_SET,/* bRequestType */
-		REQ_WPAN_SET_HWADDR,/* wValue */
-		0,		/* wIndex */
-		&addr,		/* pData */
-		sizeof(__le64),	/* wSize */
-		HZ);		/* tOut */
-	if(ret < sizeof(__le64)) {
-		dev_err(&iface->dev,"Error set WPAN device"
-			" hardware addreess!\n");
-		return -ENOTSUPP;
-	};
-	return 0;
-}
-
 /* set_txpower:
 	Set radio transmit power in dB. Called with pib_lock held.
 	Returns either zero, or negative errno. */
-static int wpan_usb_set_txpower(struct ieee802154_dev *wpan_dev, int db)
+static int wpan_usb_set_txpower(struct ieee802154_hw *wpan_hw, int db)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
 	struct wpan_tx_power	power;
@@ -458,9 +432,9 @@ static int wpan_usb_set_txpower(struct ieee802154_dev *wpan_dev, int db)
 	Enables or disables listen before talk on the device. Called with
 	pib_lock held.
 	Returns either zero, or negative errno. */
-static int wpan_usb_set_lbt(struct ieee802154_dev *wpan_dev, bool on)
+static int wpan_usb_set_lbt(struct ieee802154_hw *wpan_hw, bool on)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
 	struct wpan_lbt		lbt;
@@ -490,9 +464,9 @@ static int wpan_usb_set_lbt(struct ieee802154_dev *wpan_dev, bool on)
 /* set_cca_mode:
 	Sets the CCA mode used by the device. Called with pib_lock held.
 	Returns either zero, or negative errno. */
-static int wpan_usb_set_cca_mode(struct ieee802154_dev *wpan_dev, u8 mode)
+static int wpan_usb_set_cca_mode(struct ieee802154_hw *wpan_hw, u8 mode)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
 	struct wpan_cca		cca;
@@ -519,10 +493,10 @@ static int wpan_usb_set_cca_mode(struct ieee802154_dev *wpan_dev, u8 mode)
 	Sets the CCA energy detection threshold in dBm. Called with pib_lock
 	held.
 	Returns either zero, or negative errno. */
-static int wpan_usb_set_cca_ed_level(struct ieee802154_dev *wpan_dev,
+static int wpan_usb_set_cca_ed_level(struct ieee802154_hw *wpan_hw,
 				s32 level)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
 	struct wpan_cca_threshold threshold;
@@ -548,10 +522,10 @@ static int wpan_usb_set_cca_ed_level(struct ieee802154_dev *wpan_dev,
 /* set_csma_params:
 	Sets the CSMA parameter set for the PHY. Called with pib_lock held.
 	Returns either zero, or negative errno. */
-static int wpan_usb_set_csma_params(struct ieee802154_dev *wpan_dev,
+static int wpan_usb_set_csma_params(struct ieee802154_hw *wpan_hw,
 				u8 min_be, u8 max_be, u8 retries)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
 	struct wpan_csma_params	csma;
@@ -580,10 +554,10 @@ static int wpan_usb_set_csma_params(struct ieee802154_dev *wpan_dev,
 /* set_frame_retries:
 	Sets the retransmission attempt limit. Called with pib_lock held.
 	Returns either zero, or negative errno. */
-static int wpan_usb_set_frame_retries(struct ieee802154_dev *wpan_dev,
+static int wpan_usb_set_frame_retries(struct ieee802154_hw *wpan_hw,
 				s8 retries)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
 	struct wpan_frame_retries cca_retries;
@@ -611,11 +585,11 @@ static struct ieee802154_ops wpan_ops = {
 	.owner = THIS_MODULE,
 	.start = wpan_usb_start,
 	.stop = wpan_usb_stop,
-	.xmit = wpan_usb_xmit,
+	.xmit_sync = wpan_usb_xmit,
+	.xmit_async = wpan_usb_xmit,
 	.ed = wpan_usb_ed,
 	.set_channel = wpan_usb_set_channel,
 	.set_hw_addr_filt = wpan_usb_set_hw_addr_filt,
-	.ieee_addr = wpan_usb_ieee_addr,
 	.set_txpower = wpan_usb_set_txpower,
 	.set_lbt = wpan_usb_set_lbt,
 	.set_cca_mode = wpan_usb_set_cca_mode,
@@ -627,12 +601,12 @@ static struct ieee802154_ops wpan_ops = {
 /*
  * USB WPAN device configuration and feature detect
  */
-static int pcrm_usb_feature_detect(struct ieee802154_dev *wpan_dev)
+static int pcrm_usb_feature_detect(struct ieee802154_hw *wpan_hw)
 {
-	struct pcrm_usb_dev	*dev = wpan_dev->priv;
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
-	struct wpan_dev_features features;
+	struct wpan_usb_features features;
 	int ret;
 
 	ret = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
@@ -641,54 +615,48 @@ static int pcrm_usb_feature_detect(struct ieee802154_dev *wpan_dev)
 		REQ_WPAN_GET_FEATURES,	/* wValue */
 		0,			/* wIndex */
 		&features,		/* pData */
-		sizeof(struct wpan_dev_features), /* wSize */
+		sizeof(struct wpan_usb_features), /* wSize */
 		HZ);			/* tOut */
 
 	dev_dbg(&iface->dev,"Debug get_feature (%d) size=%d\n",
-	    ret, (int)sizeof(struct wpan_dev_features));
+	    ret, (int)sizeof(struct wpan_usb_features));
 	dev_dbg(&iface->dev,"Debug: short = 0x%04X, panid=0x%04X, coord=%d\n",
 	    features.short_addr, features.pan_id, features.pan_coordinator);
 
 	if (ret<0)
 	    return ret;
-	WARN_ON(ret != sizeof(struct wpan_dev_features));
+	WARN_ON(ret != sizeof(struct wpan_usb_features));
 
 	/* features analyze and device setup */
-	wpan_dev->extra_tx_headroom = 0;
+	wpan_hw->extra_tx_headroom = 0;
 	/* FixMe: M.B. fix later... */
-	wpan_dev->flags = features.flags;
-	wpan_dev->hw_filt.ieee_addr = features.ieee_addr;
-	wpan_dev->hw_filt.short_addr = features.short_addr;
-	wpan_dev->hw_filt.pan_id = features.pan_id;
-	wpan_dev->hw_filt.pan_coord = features.pan_coordinator;
-	wpan_dev->phy->current_channel = features.channel;
-	wpan_dev->phy->current_page = features.page;
-	wpan_dev->phy->transmit_power = features.tx_power;
-	wpan_dev->phy->frame_retries = features.max_frame_retries;
-	wpan_dev->phy->lbt = features.lbt_mode;
+	wpan_hw->flags = features.flags;
+	wpan_hw->hw_filt.ieee_addr = features.extended_addr;
+	wpan_hw->hw_filt.short_addr = features.short_addr;
+	wpan_hw->hw_filt.pan_id = features.pan_id;
+	wpan_hw->hw_filt.pan_coord = features.pan_coordinator;
+	wpan_hw->phy->current_channel = features.channel;
+	wpan_hw->phy->current_page = features.page;
+	wpan_hw->phy->transmit_power = features.tx_power;
 	/* CCA */
-	wpan_dev->phy->cca_mode = features.cca_mode;
-	wpan_dev->phy->cca_ed_level = features.cca_ed_level;
-	/* CSMA */
-	wpan_dev->phy->min_be = features.csma_min_be;
-	wpan_dev->phy->max_be = features.csma_max_be;
-	wpan_dev->phy->csma_retries = features.csma_retries;
+	wpan_hw->phy->cca_mode = features.cca_mode;
+	wpan_hw->phy->cca_ed_level = features.cca_ed_level;
 
 	ret = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
 		0,			/* bReqiest */
 		CTRL_VENDOR_GET,	/* bRequestType */
 		REQ_WPAN_GET_CHANNEL_LIST,/* wValue */
 		0,			/* wIndex */
-		wpan_dev->phy->channels_supported,/* pData */
-		sizeof(wpan_dev->phy->channels_supported), /* wSize */
+		wpan_hw->phy->channels_supported,/* pData */
+		sizeof(wpan_hw->phy->channels_supported), /* wSize */
 		HZ);			/* tOut */
 
 	dev_dbg(&iface->dev,"Debug channel_supported (%d) size=%d\n",
-	    ret, (int)sizeof(wpan_dev->phy->channels_supported));
+	    ret, (int)sizeof(wpan_hw->phy->channels_supported));
 
 	if (ret<0)
 	    return ret;
-	WARN_ON(ret != sizeof(wpan_dev->phy->channels_supported));
+	WARN_ON(ret != sizeof(wpan_hw->phy->channels_supported));
 
 	return 0;
 }
@@ -701,24 +669,25 @@ static int pcrm_usb_probe(struct usb_interface *interface,
 				const struct usb_device_id *id)
 {
 	struct pcrm_usb_dev		*dev;
-	struct ieee802154_dev		*wpan_dev;
+	struct ieee802154_hw		*wpan_hw;
 	struct usb_host_interface	*iface_descr;
 	struct usb_endpoint_descriptor	*endpoint;
 	int i;
 
 	/* allocate IEEE802.15.4 device */
-	wpan_dev = ieee802154_alloc_device(sizeof(struct pcrm_usb_dev),
+	wpan_hw = ieee802154_alloc_hw(sizeof(struct pcrm_usb_dev),
 			&wpan_ops);
 
-	if(!wpan_dev) {
+	if(!wpan_hw) {
 		dev_err(&interface->dev,"Error allocate IEEE 802.15.4"
 			" interface special device!\n");
 		return -ENOMEM;
 	};
 
 	/* Fill private info with USB device data and allow usb trafic */
-	dev = wpan_dev->priv;
-	dev->wpan_dev = wpan_dev;
+	wpan_hw->vif_data_size = sizeof(struct pcrm_usb_dev);
+	dev = wpan_hw->priv;
+	dev->wpan_hw = wpan_hw;
 	dev->udev = usb_get_dev(interface_to_usbdev(interface));
 	dev->iface = interface;
 	usb_set_intfdata(interface, dev);
@@ -758,17 +727,17 @@ static int pcrm_usb_probe(struct usb_interface *interface,
 	init_usb_anchor(&dev->inp_submitted);
 
 	/* Check USB WPAN device feature */
-	if(pcrm_usb_feature_detect(wpan_dev)) {
+	if(pcrm_usb_feature_detect(wpan_hw)) {
 		dev_err(&interface->dev,"Error get IEEE 802.15.4"
 			" device features!\n");
 		return -ENOTSUPP;
 	}
 
 	/* OK now register IEEE 802.15.4 device */
-	if (ieee802154_register_device(wpan_dev)) {
+	if (ieee802154_register_hw(wpan_hw)) {
 		dev_err(&interface->dev,"Error register configured"
 			" IEEE 802.15.4 device!\n");
-		ieee802154_free_device(wpan_dev);
+		ieee802154_free_hw(wpan_hw);
 		return -ENOTSUPP;
 	}
 
@@ -781,7 +750,7 @@ static int pcrm_usb_probe(struct usb_interface *interface,
 static void pcrm_usb_disconnect(struct usb_interface *interface)
 {
 	struct pcrm_usb_dev	*dev;
-	struct ieee802154_dev	*wpan_dev;
+	struct ieee802154_hw	*wpan_hw;
 
 	dev = usb_get_intfdata(interface);
 
@@ -789,9 +758,9 @@ static void pcrm_usb_disconnect(struct usb_interface *interface)
 	atomic_set(&dev->usb_active, 0);
 
 	/* got wpan device and free them */
-	wpan_dev = dev->wpan_dev;
-	ieee802154_unregister_device(wpan_dev);
-	ieee802154_free_device(wpan_dev);
+	wpan_hw = dev->wpan_hw;
+	ieee802154_unregister_hw(wpan_hw);
+	ieee802154_free_hw(wpan_hw);
 
 	usb_set_intfdata(interface, NULL);
 
@@ -818,12 +787,6 @@ static struct usb_driver pcrm_driver = {
 	.supports_autosuspend = 1,
 };
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
-
-module_usb_driver(pcrm_driver);
-
-#else
-
 static int __init pcrm_init(void)
 {
 	return usb_register(&pcrm_driver);
@@ -836,8 +799,6 @@ static void __exit pcrm_cleanup(void)
 
 module_init(pcrm_init);
 module_exit(pcrm_cleanup);
-
-#endif
 
 MODULE_DEVICE_TABLE(usb, wpan_usb_table);
 MODULE_DESCRIPTION(

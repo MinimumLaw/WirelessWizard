@@ -12,9 +12,9 @@
 /*
  * USB WPAN device config and features
  */
-struct __attribute__((packed)) wpan_dev_features {
+struct __attribute__((packed)) wpan_usb_features {
 	/* basic IEEE 802.15.4 params */
-	uint64_t	ieee_addr;
+	uint64_t	extended_addr;
 	uint16_t	short_addr;
 	uint16_t	pan_id;
 	bool		pan_coordinator;
@@ -64,7 +64,7 @@ struct __attribute__((packed)) wpan_channel_data {
  */
 struct __attribute__((packed)) wpan_hw_addr_filt {
 	uint32_t	changed; /* IEEEE_AFILT_CHANGED combination */
-	uint64_t	ieee_addr;
+	uint64_t	extended_addr;
 	uint16_t	short_addr;
 	uint16_t	pan_id;
 	/* true if PAN coordinator, else false */
@@ -153,7 +153,7 @@ struct pcrm_usb_dev {
 	/* device present */
 	atomic_t		usb_active;
 	/* IEEE802.15.4 specific part */
-	struct ieee802154_dev	*wpan_dev;
+	struct ieee802154_hw	*wpan_hw;
 };
 
 #endif
