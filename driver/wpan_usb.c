@@ -464,25 +464,47 @@ static int wpan_usb_set_lbt(struct ieee802154_hw *wpan_hw, bool on)
 /* set_cca_mode:
 	Sets the CCA mode used by the device. Called with pib_lock held.
 	Returns either zero, or negative errno. */
-static int wpan_usb_set_cca_mode(struct ieee802154_hw *wpan_hw, u8 mode)
+static int wpan_usb_set_cca_mode(struct ieee802154_hw *wpan_hw,
+		const struct wpan_phy_cca *cca)
 {
 	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
-	struct wpan_cca		cca;
+	struct wpan_cca		wcca;
 	int ret;
 
-	cca.mode = mode;
+	switch(cca->mode) {
+	case NL802154_CCA_ENERGY:
+		wcca.mode = 1;
+		break;
+	case NL802154_CCA_CARRIER:
+		wcca.mode = 2;
+		break;
+	case NL802154_CCA_ENERGY_CARRIER:
+		switch(cca->opt) {
+		case NL802154_CCA_OPT_ENERGY_CARRIER_AND:
+			wcca.mode = 3;
+			break;
+		case NL802154_CCA_OPT_ENERGY_CARRIER_OR:
+			wcca.mode = 4;
+			break;
+		default:
+			return -EINVAL;
+		};
+		break;
+	default:
+		return -EINVAL;
+	};
 
 	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 		0,		/* bReqiest */
 		CTRL_VENDOR_SET,/* bRequestType */
 		REQ_WPAN_SET_CCA_MODE,/* wValue */
 		0,		/* wIndex */
-		&cca,		/* pData */
-		sizeof(cca),	/* wSize */
+		&wcca,		/* pData */
+		sizeof(wcca),	/* wSize */
 		HZ);		/* tOut */
-	if(ret < sizeof(cca)) {
+	if(ret < sizeof(wcca)) {
 		dev_err(&iface->dev, "Error set WPAN device CCA mode!\n");
 		return -ENOTSUPP;
 	};
@@ -639,7 +661,7 @@ static int pcrm_usb_feature_detect(struct ieee802154_hw *wpan_hw)
 	wpan_hw->phy->current_page = features.page;
 	wpan_hw->phy->transmit_power = features.tx_power;
 	/* CCA */
-	wpan_hw->phy->cca_mode = features.cca_mode;
+	wpan_hw->phy->cca.mode = features.cca_mode;
 	wpan_hw->phy->cca_ed_level = features.cca_ed_level;
 
 	ret = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
