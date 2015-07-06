@@ -664,8 +664,23 @@ static int pcrm_usb_feature_detect(struct ieee802154_hw *wpan_hw)
 	wpan_hw->phy->current_channel = features.channel;
 	wpan_hw->phy->current_page = features.page;
 	wpan_hw->phy->transmit_power = features.tx_power;
-	/* CCA */
-	wpan_hw->phy->cca.mode = features.cca_mode;
+	/* CCA mode and threshold */
+	switch(features.cca_mode) {
+		case 1:
+			wpan_hw->phy->cca.mode = NL802154_CCA_ENERGY;
+			break;
+		case 2:
+			wpan_hw->phy->cca.mode = NL802154_CCA_CARRIER;
+			break;
+		case 3:
+			wpan_hw->phy->cca.mode = NL802154_CCA_OPT_ENERGY_CARRIER_AND;
+			break;
+		case 4:
+			wpan_hw->phy->cca.mode = NL802154_CCA_OPT_ENERGY_CARRIER_OR;
+			break;
+		default:
+			wpan_hw->phy->cca.mode = 0; /* no CCA used */
+	};
 	wpan_hw->phy->cca_ed_level = features.cca_ed_level;
 
 	ret = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
