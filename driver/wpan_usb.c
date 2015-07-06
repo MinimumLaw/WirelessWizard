@@ -189,6 +189,8 @@ static int wpan_usb_start(struct ieee802154_hw *wpan_hw)
 
 	ret = usb_submit_urb(dev->inp_urb, GFP_KERNEL);
 
+	dev_dbg(&iface->dev,"interface up\n");
+
 	return ret;
 }
 
@@ -218,6 +220,8 @@ static void wpan_usb_stop(struct ieee802154_hw *wpan_hw)
 
 	/* free receive urb */
 	usb_free_urb(dev->inp_urb);
+
+	dev_dbg(&iface->dev,"interface down\n");
 }
 
 static void usb_write_cb(struct urb *urb)
