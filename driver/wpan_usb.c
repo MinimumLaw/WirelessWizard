@@ -92,6 +92,7 @@ static void wpan_usb_receive_callback(struct urb* urb)
 
 		if(frame_len > IEEE802154_MTU) { /* to long */
 			lqi = 0;
+			ed = 0;
 			frame_len = IEEE802154_MTU;
 			dev_err(&iface->dev,
 				"to long frame recv (usb) - trim!\n");

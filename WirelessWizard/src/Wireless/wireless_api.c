@@ -44,6 +44,11 @@ void wireless_init(void)
 	if(tal_init()!= MAC_SUCCESS) {
 		app_alert();
 	}
+	/* DIG3,4 - ext PA control */
+	if(tal_ext_pa_ctrl(true)!= MAC_SUCCESS) {
+		app_alert();
+	}
+	trx_bit_write(SR_PA_LT, 3); /* Lead time 8 uS*/
 	cpu_irq_enable();
 }
 
