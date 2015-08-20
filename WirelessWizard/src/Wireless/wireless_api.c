@@ -44,6 +44,16 @@ void wireless_init(void)
 	if(tal_init()!= MAC_SUCCESS) {
 		app_alert();
 	}
+	/* DIG3,4 - ext PA control */
+	if(tal_ext_pa_ctrl(true)!= MAC_SUCCESS) {
+		app_alert();
+	}
+	/*
+	 * Lead time 8 uS, IO for DIG and CLKM - 8mA
+	 */
+	trx_bit_write(SR_PA_LT, 3);
+	trx_bit_write(SR_PAD_IO, PAD_CLKM_8_MA);
+	trx_bit_write(SR_PAD_IO_CLKM, PAD_CLKM_8_MA);
 	cpu_irq_enable();
 }
 
