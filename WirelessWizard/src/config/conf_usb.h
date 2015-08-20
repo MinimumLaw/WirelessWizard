@@ -57,7 +57,7 @@
 
 //! Device definition (mandatory)
 #define  USB_DEVICE_VENDOR_ID             0xADCA
-#define  USB_DEVICE_PRODUCT_ID            0x1001
+#define  USB_DEVICE_PRODUCT_ID            0x1002
 #define  USB_DEVICE_MAJOR_VERSION         1
 #define  USB_DEVICE_MINOR_VERSION         1
 #define  USB_DEVICE_POWER                 500 // Consumption on VBUS line (mA)
@@ -69,8 +69,8 @@
 
 //! USB Device string definitions (Optional)
 #define  USB_DEVICE_MANUFACTURE_NAME      "OAO Radioavionica"
-#define  USB_DEVICE_PRODUCT_NAME          "PRCM module AT86RF212B 900MHz"
-#define  USB_DEVICE_SERIAL_NAME           "050315-01"
+#define  USB_DEVICE_PRODUCT_NAME          "PRCM module 900MHz 3.19+"
+#define  USB_DEVICE_SERIAL_NAME           "200815-01"
 
 /**
  * Device speeds support

@@ -14,10 +14,6 @@ wpan_dev_cfg wpan_dev = {
 	.tx_power = 10, /* Fixed value: see TODO list */
 	.lbt_mode = true, /* Fixed value: see TODO list*/
 	.wpan_active = false,
-	/* default FLAGS */
-	.flags = IEEE802154_HW_OMIT_CKSUM | IEEE802154_HW_AACK | 
-			IEEE802154_HW_TXPOWER | IEEE802154_HW_CSMA |
-			IEEE802154_HW_LBT,
 	/* default CCA params */
 	.cca_ed_level = 0x00,
 	.cca_mode = TAL_CCA_MODE_DEFAULT,
@@ -27,6 +23,10 @@ wpan_dev_cfg wpan_dev = {
 	.csma_min_be = TAL_MINBE_DEFAULT,
 	.csma_max_be = TAL_MAXBE_DEFAULT,
 	.csma_retries = TAL_MAX_CSMA_BACKOFFS_DEFAULT,
+	/* Promiscous mode */
+#ifdef PROMISCUOUS_MODE
+	.promisc_mode = false,
+#endif
 };
 
 wpan_dev_cfg *wdev = &wpan_dev;
@@ -98,9 +98,8 @@ void init_default_pib(void)
 
 	/*Enable Promiscuous Mode pib attribute to put the transceiver in RX_ON mode.*/
 #ifdef PROMISCUOUS_MODE
-	bool mode = true;
 	tal_rxaack_prom_mode_ctrl(true);
-	tal_pib_set(macPromiscuousMode, (pib_value_t *)&mode);
+	tal_pib_set(macPromiscuousMode, (pib_value_t *)&wdev->promisc_mode);
 #endif
 }
 
