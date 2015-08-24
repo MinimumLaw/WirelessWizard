@@ -27,7 +27,7 @@
  * USB device driver specific constants and tables
  */
 #define WPAN_USB_VID		0xADCA
-#define WPAN_USB_PID		0x1001
+#define WPAN_USB_PID		0x1002
 #define WPAN_USB_CLASS		0xFF
 #define WPAN_USB_SUBCLASS	0xFF
 #define WPAN_USB_PROTO		0xFF
@@ -44,18 +44,24 @@
 enum {
 	REQ_WPAN_START,
 	REQ_WPAN_STOP,
-	REQ_WPAN_GET_ED,
 	REQ_WPAN_SET_CHANNEL,
-	REQ_WPAN_SET_HWADDR_FILT,
-	REQ_WPAN_SET_HWADDR,
+	REQ_WPAN_SET_PAGE,
+	REQ_WPAN_SET_SHORT_ADDR,
+	REQ_WPAN_SET_PAN_COORD,
+	REQ_WPAN_SET_PAN_ID,
+	REQ_WPAN_SET_HW_ADDR,
 	REQ_WPAN_SET_TXPOWER,
 	REQ_WPAN_SET_LBT,
 	REQ_WPAN_SET_CCA_MODE,
 	REQ_WPAN_SET_CCA_ED_LEVEL,
-	REQ_WPAN_SET_CSMA_PARAMS,
+	REQ_WPAN_SET_CSMA_MIN_BE,
+	REQ_WPAN_SET_CSMA_MAX_BE,
+	REQ_WPAN_SET_CSMA_RETRIES,
 	REQ_WPAN_SET_FRAME_RETRIES,
 	REQ_WPAN_GET_FEATURES,
 	REQ_WPAN_GET_CHANNEL_LIST,
+	REQ_WPAN_GET_ED,
+	REQ_WPAN_SET_PROMISC_MODE,
 };
 
 /*
@@ -141,7 +147,7 @@ static int wpan_usb_start(struct ieee802154_hw *wpan_hw)
 	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
-	struct wpan_dummy_write	dummy;
+	uint8_t	dummy;
 	int ret;
 
 	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
@@ -201,7 +207,7 @@ static void wpan_usb_stop(struct ieee802154_hw *wpan_hw)
 	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
-	struct wpan_dummy_write	dummy;
+	uint8_t	dummy;
 	int ret;
 
 	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
@@ -234,6 +240,8 @@ static void usb_write_cb(struct urb *urb)
 
 	usb_free_coherent(urb->dev, urb->transfer_buffer_length,
 			urb->transfer_buffer, urb->transfer_dma);
+
+	dev_err(&iface->dev,"Transfer done!");
 }
 
 /* xmit: Handler that 802.15.4 module calls for each transmitted frame.
@@ -296,6 +304,10 @@ static int wpan_usb_xmit(struct ieee802154_hw *wpan_hw, struct sk_buff *skb)
 	}
 
 	usb_free_urb(dev->out_urb);
+	/*
+	 * FixMe: Is xmit_coplete must be call from callback???
+	 */
+	ieee802154_xmit_complete(wpan_hw, skb, true);
 
 	return retval;
 
@@ -346,21 +358,30 @@ static int wpan_usb_set_channel(struct ieee802154_hw *wpan_hw,
 	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
-	struct wpan_channel_data set_channel;
 	int ret;
 
-	set_channel.page = page;
-	set_channel.channel = channel;
+	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
+		0,/* bReqiest */
+		CTRL_VENDOR_SET,/* bRequestType */
+		REQ_WPAN_SET_PAGE,/* wValue */
+		0,		/* wIndex */
+		&page,		/* pData */
+		sizeof(page),	/* wSize */
+		HZ);		/* tOut */
+	if(ret < sizeof(page)) {
+		dev_err(&iface->dev,"Error set WPAN device page!");
+		return -ENOTSUPP;
+	};
 
 	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 		0,/* bReqiest */
 		CTRL_VENDOR_SET,/* bRequestType */
 		REQ_WPAN_SET_CHANNEL,/* wValue */
 		0,		/* wIndex */
-		&set_channel,	/* pData */
-		sizeof(set_channel),/* wSize */
+		&channel,	/* pData */
+		sizeof(channel),/* wSize */
 		HZ);		/* tOut */
-	if(ret < sizeof(set_channel)) {
+	if(ret < sizeof(channel)) {
 		dev_err(&iface->dev,"Error set WPAN device channel!");
 		return -ENOTSUPP;
 	};
@@ -378,28 +399,76 @@ static int wpan_usb_set_hw_addr_filt(struct ieee802154_hw *wpan_hw,
 	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
-	struct wpan_hw_addr_filt filter;
 	int ret;
 
-	filter.changed = changed;
-	filter.extended_addr = filt->ieee_addr;
-	filter.short_addr = filt->short_addr;
-	filter.pan_id = filt->pan_id;
-	filter.pan_coordinator = filt->pan_coord;
+	if (changed & IEEE802154_AFILT_SADDR_CHANGED) {
+		ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
+			0,		/* bReqiest */
+			CTRL_VENDOR_SET,/* bRequestType */
+			REQ_WPAN_SET_SHORT_ADDR,/* wValue */
+			0,		/* wIndex */
+			&filt->short_addr,/* pData */
+			sizeof(filt->short_addr),/* wSize */
+			HZ);		/* tOut */
+		if(ret < sizeof(filt->short_addr)) {
+			dev_err(&iface->dev,"Error send short addreess"
+				" filter to WPAN device!\n");
+			return -ENOTSUPP;
+		};
+		dev_err(&iface->dev,"SADDR: 0x%04X\n", filt->short_addr);
+	}
 
-	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
-		0,		/* bReqiest */
-		CTRL_VENDOR_SET,/* bRequestType */
-		REQ_WPAN_SET_HWADDR_FILT,/* wValue */
-		0,		/* wIndex */
-		&filter,	/* pData */
-		sizeof(filter),	/* wSize */
-		HZ);		/* tOut */
-	if(ret < sizeof(filter)) {
-		dev_err(&iface->dev,"Error send hardware addreess"
-			" filter to WPAN device!\n");
-		return -ENOTSUPP;
-	};
+	if (changed & IEEE802154_AFILT_PANID_CHANGED) {
+		ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
+			0,		/* bReqiest */
+			CTRL_VENDOR_SET,/* bRequestType */
+			REQ_WPAN_SET_PAN_ID,/* wValue */
+			0,		/* wIndex */
+			&filt->pan_id,/* pData */
+			sizeof(filt->pan_id),/* wSize */
+			HZ);		/* tOut */
+		if(ret < sizeof(filt->pan_id)) {
+			dev_err(&iface->dev,"Error send pan id"
+				" filter to WPAN device!\n");
+			return -ENOTSUPP;
+		};
+		dev_err(&iface->dev,"PAN_ID: 0x%04X\n", filt->pan_id);
+	}
+
+	if (changed & IEEE802154_AFILT_PANC_CHANGED) {
+		ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
+			0,		/* bReqiest */
+			CTRL_VENDOR_SET,/* bRequestType */
+			REQ_WPAN_SET_PAN_COORD,/* wValue */
+			0,		/* wIndex */
+			&filt->pan_coord,/* pData */
+			sizeof(filt->pan_coord),/* wSize */
+			HZ);		/* tOut */
+		if(ret < sizeof(filt->pan_coord)) {
+			dev_err(&iface->dev,"Error send pan coordinator"
+				" filter to WPAN device!\n");
+			return -ENOTSUPP;
+		};
+		dev_err(&iface->dev,"PANC: %d\n", filt->pan_coord);
+	}
+
+	if (changed & IEEE802154_AFILT_IEEEADDR_CHANGED) {
+		ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
+			0,		/* bReqiest */
+			CTRL_VENDOR_SET,/* bRequestType */
+			REQ_WPAN_SET_HW_ADDR,/* wValue */
+			0,		/* wIndex */
+			&filt->ieee_addr,/* pData */
+			sizeof(filt->ieee_addr),/* wSize */
+			HZ);		/* tOut */
+		if(ret < sizeof(filt->ieee_addr)) {
+			dev_err(&iface->dev,"Error send hardware addreess"
+				" filter to WPAN device!\n");
+			return -ENOTSUPP;
+		};
+		dev_err(&iface->dev,"MAC: 0x%llx\n", filt->ieee_addr);
+	}
+
 	return 0;
 }
 
@@ -411,10 +480,8 @@ static int wpan_usb_set_txpower(struct ieee802154_hw *wpan_hw, int db)
 	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
-	struct wpan_tx_power	power;
+	uint8_t	power = (uint8_t)db;
 	int ret;
-
-	power.tx_power = db;
 
 	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 		0,		/* bReqiest */
@@ -441,23 +508,17 @@ static int wpan_usb_set_lbt(struct ieee802154_hw *wpan_hw, bool on)
 	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
-	struct wpan_lbt		lbt;
 	int ret;
-
-	if(on == true)
-	    lbt.mode = 1;
-	else
-	    lbt.mode = 0;
 
 	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 		0,/* bReqiest */
 		CTRL_VENDOR_SET,/* bRequestType */
 		REQ_WPAN_SET_LBT,/* wValue */
 		0,		/* wIndex */
-		&lbt,		/* pData */
-		sizeof(lbt),	/* wSize */
+		&on,		/* pData */
+		sizeof(on),	/* wSize */
 		HZ);		/* tOut */
-	if(ret < sizeof(lbt)) {
+	if(ret < sizeof(on)) {
 		dev_err(&iface->dev,
 			"Error set WPAN device listen before talk mode!\n");
 		return -ENOTSUPP;
@@ -474,23 +535,23 @@ static int wpan_usb_set_cca_mode(struct ieee802154_hw *wpan_hw,
 	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
-	struct wpan_cca		wcca;
-	int ret;
+	uint8_t	wcca;
+	int	ret;
 
 	switch(cca->mode) {
 	case NL802154_CCA_ENERGY:
-		wcca.mode = 1;
+		wcca = 1;
 		break;
 	case NL802154_CCA_CARRIER:
-		wcca.mode = 2;
+		wcca = 2;
 		break;
 	case NL802154_CCA_ENERGY_CARRIER:
 		switch(cca->opt) {
 		case NL802154_CCA_OPT_ENERGY_CARRIER_AND:
-			wcca.mode = 3;
+			wcca = 3;
 			break;
 		case NL802154_CCA_OPT_ENERGY_CARRIER_OR:
-			wcca.mode = 4;
+			wcca = 4;
 			break;
 		default:
 			return -EINVAL;
@@ -525,10 +586,8 @@ static int wpan_usb_set_cca_ed_level(struct ieee802154_hw *wpan_hw,
 	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
-	struct wpan_cca_threshold threshold;
-	int ret;
-
-	threshold.level = level;
+	uint8_t	threshold = (uint8_t)level;
+	int	ret;
 
 	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 		0,		/* bReqiest */
@@ -554,26 +613,50 @@ static int wpan_usb_set_csma_params(struct ieee802154_hw *wpan_hw,
 	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
-	struct wpan_csma_params	csma;
 	int ret;
-
-	csma.min_be = min_be;
-	csma.max_be = max_be;
-	csma.retries = retries;
 
 	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 		0,		/* bReqiest */
 		CTRL_VENDOR_SET,/* bRequestType */
-		REQ_WPAN_SET_CSMA_PARAMS,/* wValue */
+		REQ_WPAN_SET_CSMA_MIN_BE,/* wValue */
 		0,		/* wIndex */
-		&csma,		/* pData */
-		sizeof(csma),	/* wSize */
+		&min_be,	/* pData */
+		sizeof(min_be),	/* wSize */
 		HZ);		/* tOut */
-	if(ret < sizeof(csma)) {
+	if(ret < sizeof(min_be)) {
 		dev_err(&iface->dev, "Error set WPAN device"
-			" CSMA parameters!\n");
+			" CSMA MIN_BE parameters!\n");
 		return -ENOTSUPP;
 	};
+
+	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
+		0,		/* bReqiest */
+		CTRL_VENDOR_SET,/* bRequestType */
+		REQ_WPAN_SET_CSMA_MAX_BE,/* wValue */
+		0,		/* wIndex */
+		&max_be,	/* pData */
+		sizeof(max_be),	/* wSize */
+		HZ);		/* tOut */
+	if(ret < sizeof(max_be)) {
+		dev_err(&iface->dev, "Error set WPAN device"
+			" CSMA MAX_BE parameters!\n");
+		return -ENOTSUPP;
+	};
+
+	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
+		0,		/* bReqiest */
+		CTRL_VENDOR_SET,/* bRequestType */
+		REQ_WPAN_SET_CSMA_RETRIES,/* wValue */
+		0,		/* wIndex */
+		&retries,	/* pData */
+		sizeof(retries),/* wSize */
+		HZ);		/* tOut */
+	if(ret < sizeof(retries)) {
+		dev_err(&iface->dev, "Error set WPAN device"
+			" CSMA RETRIES parameters!\n");
+		return -ENOTSUPP;
+	};
+
 	return 0;
 }
 
@@ -586,10 +669,8 @@ static int wpan_usb_set_frame_retries(struct ieee802154_hw *wpan_hw,
 	struct pcrm_usb_dev	*dev = wpan_hw->priv;
 	struct usb_interface	*iface = dev->iface;
 	struct usb_device	*udev = dev->udev;
-	struct wpan_frame_retries cca_retries;
+	uint8_t cca_retries = (uint8_t)retries;
 	int ret;
-
-	cca_retries.count = retries;
 
 	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 		0,		/* bReqiest */
@@ -607,11 +688,43 @@ static int wpan_usb_set_frame_retries(struct ieee802154_hw *wpan_hw,
 	return 0;
 }
 
+#ifdef _USE_PROMISC_MODE_
+
+/* set_promisc:
+	Switch promiscuous mode on wpan hardware.
+	Returns either zero, or negative errno. */
+static int wpan_usb_set_promisc(struct ieee802154_hw *wpan_hw,
+				const bool on)
+{
+	struct pcrm_usb_dev	*dev = wpan_hw->priv;
+	struct usb_interface	*iface = dev->iface;
+	struct usb_device	*udev = dev->udev;
+	bool	mode = on;
+	int	ret;
+
+	ret = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
+		0,		/* bReqiest */
+		CTRL_VENDOR_SET,/* bRequestType */
+		REQ_WPAN_SET_PROMISC_MODE,/* wValue */
+		0,		/* wIndex */
+		&mode,		/* pData */
+		sizeof(mode),	/* wSize */
+		HZ);		/* tOut */
+	if(ret < sizeof(mode)) {
+		dev_err(&iface->dev, "Error set WPAN device"
+			" promiscous mode!\n");
+		return -ENOTSUPP;
+	};
+	return 0;
+}
+
+#endif
+
 static struct ieee802154_ops wpan_ops = {
 	.owner = THIS_MODULE,
 	.start = wpan_usb_start,
 	.stop = wpan_usb_stop,
-	.xmit_sync = wpan_usb_xmit,
+/*	.xmit_sync = wpan_usb_xmit,*/
 	.xmit_async = wpan_usb_xmit,
 	.ed = wpan_usb_ed,
 	.set_channel = wpan_usb_set_channel,
@@ -622,6 +735,9 @@ static struct ieee802154_ops wpan_ops = {
 	.set_cca_ed_level = wpan_usb_set_cca_ed_level,
 	.set_csma_params = wpan_usb_set_csma_params,
 	.set_frame_retries = wpan_usb_set_frame_retries,
+#ifdef _USE_PROMISC_MODE_
+	.set_promiscuous_mode = wpan_usb_set_promisc,
+#endif
 };
 
 /*
@@ -656,7 +772,17 @@ static int pcrm_usb_feature_detect(struct ieee802154_hw *wpan_hw)
 	/* features analyze and device setup */
 	wpan_hw->extra_tx_headroom = 0;
 	/* FixMe: M.B. fix later... */
-	wpan_hw->flags = features.flags;
+	wpan_hw->flags =
+#ifdef _USE_PROMISC_MODE_
+		IEEE802154_HW_PROMISCUOUS |
+#endif
+		IEEE802154_HW_TX_OMIT_CKSUM |
+		IEEE802154_HW_AACK |
+		IEEE802154_HW_TXPOWER |
+		IEEE802154_HW_CSMA |
+		IEEE802154_HW_LBT |
+		IEEE802154_HW_AFILT;
+	wpan_hw->phy->perm_extended_addr = features.extended_addr;
 	wpan_hw->hw_filt.ieee_addr = features.extended_addr;
 	wpan_hw->hw_filt.short_addr = features.short_addr;
 	wpan_hw->hw_filt.pan_id = features.pan_id;

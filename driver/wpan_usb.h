@@ -9,6 +9,8 @@
 #ifndef _INCLUDE_WPAN_USB_H_
 #define _INCLUDE_WPAN_USB_H_
 
+#define _DUMP_SKB_AND_URB_
+
 /*
  * USB WPAN device config and features
  */
@@ -30,110 +32,16 @@ struct __attribute__((packed)) wpan_usb_features {
 	uint8_t		csma_min_be;
 	uint8_t		csma_max_be;
 	uint8_t		csma_retries;
+#ifdef _USE_PROMISC_MODE_
+	/* Promiscuous mode */
+	bool		promisc_mode;
+#endif
 	/* Hardware specific params */
-	uint32_t	flags;
 	uint8_t		last_ed;
 	bool		wpan_active;
 	bool		lbt_mode;
 	bool		pa_ext_sw_ctrl;
 };
-
-/*
- * Data structures used for set params of WPAN radio transmitter.
- * REQ_WPAN_SET_HWADDR send IEEE address (MAC address) directly
- * in data section
- */
-
-/* Dummy write data.
- * Used for REQ_WPAN_START, REQ_WPAN_STOP
- */
-struct __attribute__((packed)) wpan_dummy_write {
-	uint8_t	dummy;
-};
-
-/* Set current radio frequency
- * Used for REQ_WPAN_SET_CHANNEL
- */
-struct __attribute__((packed)) wpan_channel_data {
-	uint8_t	channel;
-	uint8_t page;
-};
-
-/* Set or update hardware filters
- * Used for REQ_WPAN_SET_HWADDR_FILT
- */
-struct __attribute__((packed)) wpan_hw_addr_filt {
-	uint32_t	changed; /* IEEEE_AFILT_CHANGED combination */
-	uint64_t	extended_addr;
-	uint16_t	short_addr;
-	uint16_t	pan_id;
-	/* true if PAN coordinator, else false */
-	uint8_t		pan_coordinator; 
-};
-
-/* Set current transmit power
- * Used for REQ_WPAN_SET_TXPOWER
- */
-struct __attribute__((packed)) wpan_tx_power {
-	uint8_t	tx_power;
-};
-
-/* Set listen before talk mode
- * Used for REQ_WPAN_SET_LBT
- */
-struct __attribute__((packed)) wpan_lbt {
-	uint8_t	mode;
-};
-
-/* Set CCA mode
- * Used for REQ_WPAN_SET_CCA_MODE
- */
-struct __attribute__((packed)) wpan_cca {
-	uint8_t	mode;
-};
-
-/* Set CCA energy detection threshold
- * Used for REQ_WPAN_SET_CCA_ED_LEVEL
- */
-struct __attribute__((packed)) wpan_cca_threshold {
-	uint8_t level;
-};
-
-/* Set frame retries count
- * Used for REQ_WPAN_SET_FRAME_RETRIES
- */
-struct __attribute__((packed)) wpan_frame_retries {
-	uint8_t count;
-};
-
-/* FixMe: M.B. change API and combine REQ_WPAN_SET_CCA_MODE,
- *	REQ_WPAN_SET_CCA_ED_LEVEL and REQ_WPAN_SET_RETRIES
- *	int single REQ_WPAN_CCA_PARAMS with
- * struct __attribute__((packed)) wpan_cca_params {
- *		uint8_t	mode;
- *		uint8_t	threshold;
- *		uint8_t	retries;
- *	};
- */
-
-/* Set WPAN device CSMA params
- * Used for REQ_WPAN_SET_CSMA_PARAMS
- */
-struct __attribute__((packed)) wpan_csma_params {
-	uint8_t min_be;
-	uint8_t max_be;
-	uint8_t retries;
-};
-
-/* FixMe: M.B.
- * typedef union {
- *		struct wpan_tx_power		power;
- *		struct wpan_hw_addr_filt	filt;
- *		...
- *		struct wpan_csma_params		csma;
- * } wpan_control_request;
- * and use them in params code???
- */
 
 /*
  * Private device data
