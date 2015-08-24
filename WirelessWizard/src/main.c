@@ -234,7 +234,7 @@ void prcm_device_disable(void)
 /* callback functions for device setup requests */
 /************************************************/
 
-static struct wpan_dummy_write dummy_write;
+static uint8_t dummy_write;
 void start_callback(void);
 void stop_callback(void);
 
@@ -251,42 +251,20 @@ void stop_callback(void) {
 	wdev->wpan_active = false;
 }
 
-static struct wpan_channel_data channel_data;
+static uint8_t channel_data;
 void set_channel_callback(void);
 
 void set_channel_callback(void) {
-	/* TODO linux-wireleess at this moment not set page, only channel. Need fixing */
-//	wdev->page = channel_data.page;
-//	wdev->channel = channel_data.channel;
-	tal_pib_set(phyCurrentPage, (pib_value_t *)&wdev->page);
+	wdev->channel = channel_data;
 	tal_pib_set(phyCurrentChannel, (pib_value_t *)&wdev->channel);
 }
 
-static struct wpan_hw_addr_filt hw_filter;
-void hw_filter_callback(void);
+static uint8_t page_data;
+void set_page_callback(void);
 
-void hw_filter_callback(void) {
-	/* check all known flags */
-	if (hw_filter.changed & IEEE802515_AFILT_IEEEADDR_CHANGED) {
-		wdev->ieee_addr = hw_filter.ieee_addr;
-		tal_pib_set(macIeeeAddress, (pib_value_t *)&wdev->ieee_addr);
-	};
-	if (hw_filter.changed & IEEE802515_AFILT_PANC_CHANGED) {
-		wdev->pan_coordinator = hw_filter.pan_coordinator ? true : false;
-		tal_pib_set(mac_i_pan_coordinator,(pib_value_t *) &wdev->pan_coordinator);
-	};
-	if (hw_filter.changed & IEEE802515_AFILT_PANID_CHANGED) {
-		wdev->pan_id = hw_filter.pan_id;
-		tal_pib_set(macPANId, (pib_value_t *)&wdev->pan_id);
-	};
-	if (hw_filter.changed & IEEE802515_AFILT_SADDR_CHANGED) {
-		wdev->short_addr = hw_filter.short_addr;
-		tal_pib_set(macShortAddress, (pib_value_t *)&wdev->short_addr);
-	};
-	/* clear all checked flags */
-	hw_filter.changed &= ~(IEEE802515_AFILT_IEEEADDR_CHANGED |
-		IEEE802515_AFILT_PANC_CHANGED |	IEEE802515_AFILT_PANID_CHANGED |
-		IEEE802515_AFILT_SADDR_CHANGED);
+void set_page_callback(void) {
+	wdev->page = page_data;
+	tal_pib_set(phyCurrentPage, (pib_value_t *)&wdev->page);
 }
 
 static uint64_t ieee_addr;
@@ -297,62 +275,108 @@ void ieee_address_callback(void) {
 	tal_pib_set(macIeeeAddress, (pib_value_t *)&wdev->ieee_addr);
 }
 
-static struct wpan_tx_power tx_power;
+static bool pan_coord;
+void pancoord_callback(void);
+
+void pancoord_callback(void)
+{
+	wdev->pan_coordinator = pan_coord;
+	tal_pib_set(mac_i_pan_coordinator, (pib_value_t *)&wdev->pan_coordinator);
+}
+
+static uint16_t pan_id;
+void panid_callback(void);
+
+void panid_callback(void)
+{
+	wdev->pan_id = pan_id;
+	tal_pib_set(macPANId, (pib_value_t *)&wdev->pan_id);
+}
+
+static uint16_t short_addr;
+void short_address_callback(void);
+
+void short_address_callback(void)
+{
+	wdev->short_addr = short_addr;
+	tal_pib_set(macPANId, (pib_value_t *)&wdev->short_addr);
+}
+
+static uint8_t tx_power;
 void tx_power_callback(void);
 
 void tx_power_callback(void) {
-	/* TODO linux-wireleess at this moment set tx-power to 0dBm, need fixing */
-//	wdev->tx_power = tx_power.tx_power;
+	wdev->tx_power = tx_power;
 	tal_pib_set(phyTransmitPower, (pib_value_t *)&wdev->tx_power);
 }
 
-static struct wpan_lbt lbt;
+static uint8_t lbt_mode;
 void lbt_callback(void);
 
 void lbt_callback(void) {
-	/* TODO Khmm... May be set, but disabled for preasure */
-//	wdev->lbt_mode = lbt.mode ? true : false;
+	wdev->lbt_mode = lbt_mode ? true : false;
 	trx_bit_write(SR_CSMA_LBT_MODE, wdev->lbt_mode ? 1 : 0);
 }
 
-static struct wpan_cca cca;
+static uint8_t cca_mode;
 void cca_callback(void);
 
 void cca_callback(void) {
-	wdev->cca_mode = cca.mode;
+	wdev->cca_mode = cca_mode;
 	tal_pib_set(phyCCAMode, (pib_value_t *)&wdev->cca_mode);
 }
 
-static struct wpan_cca_threshold cca_ed_level;
+static uint8_t cca_ed_level;
 void cca_ed_level_callback(void);
 
 void cca_ed_level_callback(void) {
-	wdev->cca_ed_level = cca_ed_level.level;
+	wdev->cca_ed_level = cca_ed_level;
 #ifdef CCA_ED_THRESHOLD
 	trx_bit_write(SR_CCA_ED_THRES, wdev->cca_ed_level);
 #endif // CCA_ED_THRESHOLD
 }
 
-static struct wpan_csma_params csma;
-void csma_callback(void);
+static uint8_t csma_min_be;
+void csma_min_be_callback(void);
 
-void csma_callback(void) {
-	wdev->csma_min_be = csma.min_be;
-	wdev->csma_max_be = csma.max_be;
-	wdev->csma_retries = csma.retries;
+void csma_min_be_callback(void) {
+	wdev->csma_min_be = csma_min_be;
 	tal_pib_set(macMinBE, (pib_value_t *)&wdev->csma_min_be);
-	tal_pib_set(macMaxBE, (pib_value_t *)&wdev->csma_max_be);
+}
+
+static uint8_t csma_max_be;
+void csma_max_be_callback(void);
+
+void csma_max_be_callback(void) {
+	wdev->csma_max_be = csma_max_be;
+	tal_pib_set(macMinBE, (pib_value_t *)&wdev->csma_max_be);
+}
+
+static uint8_t csma_retries;
+void csma_retries_callback(void);
+
+void csma_retries_callback(void) {
+	wdev->csma_retries = csma_retries;
 	tal_pib_set(macMaxCSMABackoffs, (pib_value_t *)&wdev->csma_retries);
 }
 
-static struct wpan_frame_retries frame_retries;
+static uint8_t frame_retries;
 void frame_retries_callback(void);
 
 void frame_retries_callback(void) {
-	wdev->max_frame_retries = frame_retries.count;
+	wdev->max_frame_retries = frame_retries;
 	tal_pib_set(macMaxFrameRetries, (pib_value_t *)&wdev->max_frame_retries);
 }
 
+#ifdef PROMISCUOUS_MODE
+static uint8_t promisc_mode;
+void promisc_mode_callback(void);
+
+void promisc_mode_callback(void) {
+	wdev->promisc_mode = promisc_mode ? true : false;
+	tal_pib_set(macPromiscuousMode, (pib_value_t *)&wdev->promisc_mode);
+}
+#endif
 
 #define SETUP_OUT_CALLBACK(structure, function) \
 	{ \
@@ -368,49 +392,75 @@ bool prcm_setup_out(void)
 	
 	switch(udd_g_ctrlreq.req.wValue) {
 		case REQ_WPAN_START:
-			if (udd_g_ctrlreq.req.wLength == sizeof(struct wpan_dummy_write))
+			if (udd_g_ctrlreq.req.wLength == sizeof(dummy_write))
 				SETUP_OUT_CALLBACK(dummy_write, start_callback);
 			break;
 		case REQ_WPAN_STOP:
-			if (udd_g_ctrlreq.req.wLength == sizeof(struct wpan_dummy_write))
+			if (udd_g_ctrlreq.req.wLength == sizeof(dummy_write))
 				SETUP_OUT_CALLBACK(dummy_write, stop_callback);
 			break;
 		case REQ_WPAN_SET_CHANNEL:
-			if (udd_g_ctrlreq.req.wLength == sizeof(struct wpan_channel_data))
+			if (udd_g_ctrlreq.req.wLength == sizeof(channel_data))
 				SETUP_OUT_CALLBACK(channel_data, set_channel_callback);
 			break;
-		case REQ_WPAN_SET_HWADDR_FILT:
-			if (udd_g_ctrlreq.req.wLength == sizeof(struct wpan_hw_addr_filt))
-				SETUP_OUT_CALLBACK(hw_filter, hw_filter_callback);
+		case REQ_WPAN_SET_PAGE:
+			if (udd_g_ctrlreq.req.wLength == sizeof(page_data))
+				SETUP_OUT_CALLBACK(page_data, set_page_callback);
 			break;
-		case REQ_WPAN_SET_HWADDR:
+		case REQ_WPAN_SET_SHORT_ADDR:
+			if (udd_g_ctrlreq.req.wLength == sizeof(short_addr))
+				SETUP_OUT_CALLBACK(short_addr, short_address_callback);
+			break;
+		case REQ_WPAN_SET_PAN_ID:
+			if (udd_g_ctrlreq.req.wLength == sizeof(pan_id))
+				SETUP_OUT_CALLBACK(pan_id, panid_callback);
+			break;
+		case REQ_WPAN_SET_HW_ADDR:
 			if (udd_g_ctrlreq.req.wLength == sizeof(ieee_addr))
 				SETUP_OUT_CALLBACK(ieee_addr, ieee_address_callback);
 			break;
+		case REQ_WPAN_SET_PAN_COORD:
+			if (udd_g_ctrlreq.req.wLength == sizeof(pan_coord))
+				SETUP_OUT_CALLBACK(ieee_addr, pancoord_callback);
+		break;
 		case REQ_WPAN_SET_TXPOWER:
 			if (udd_g_ctrlreq.req.wLength == sizeof(tx_power))
 				SETUP_OUT_CALLBACK(tx_power, tx_power_callback);
 			break;
 		case REQ_WPAN_SET_LBT:
-			if (udd_g_ctrlreq.req.wLength == sizeof(lbt))
-				SETUP_OUT_CALLBACK(lbt, lbt_callback);
+			if (udd_g_ctrlreq.req.wLength == sizeof(lbt_mode))
+				SETUP_OUT_CALLBACK(lbt_mode, lbt_callback);
 			break;
 		case REQ_WPAN_SET_CCA_MODE:
-			if (udd_g_ctrlreq.req.wLength == sizeof(cca))
-				SETUP_OUT_CALLBACK(cca, cca_callback);
+			if (udd_g_ctrlreq.req.wLength == sizeof(cca_mode))
+				SETUP_OUT_CALLBACK(cca_mode, cca_callback);
 			break;
 		case REQ_WPAN_SET_CCA_ED_LEVEL:
 			if (udd_g_ctrlreq.req.wLength == sizeof(cca_ed_level))
 				SETUP_OUT_CALLBACK(cca_ed_level, cca_ed_level_callback);
-		break;
-		case REQ_WPAN_SET_CSMA_PARAMS:
-			if (udd_g_ctrlreq.req.wLength == sizeof(csma))
-				SETUP_OUT_CALLBACK(csma, csma_callback);
+			break;
+		case REQ_WPAN_SET_CSMA_MIN_BE:
+			if (udd_g_ctrlreq.req.wLength == sizeof(csma_min_be))
+				SETUP_OUT_CALLBACK(csma_min_be, csma_min_be_callback);
+			break;
+		case REQ_WPAN_SET_CSMA_MAX_BE:
+			if (udd_g_ctrlreq.req.wLength == sizeof(csma_max_be))
+				SETUP_OUT_CALLBACK(csma_max_be, csma_max_be_callback);
+			break;
+		case REQ_WPAN_SET_CSMA_RETRIES:
+			if (udd_g_ctrlreq.req.wLength == sizeof(csma_retries))
+				SETUP_OUT_CALLBACK(csma_retries, csma_retries_callback);
 			break;
 		case REQ_WPAN_SET_FRAME_RETRIES:
 			if (udd_g_ctrlreq.req.wLength == sizeof(frame_retries))
 				SETUP_OUT_CALLBACK(frame_retries, frame_retries_callback);
 			break;
+#ifdef PROMISCUOUS_MODE
+		case REQ_WPAN_SET_PROMISC_MODE:
+			if (udd_g_ctrlreq.req.wLength == sizeof(promisc_mode))
+				SETUP_OUT_CALLBACK(promisc_mode, promisc_mode_callback);
+			break;
+#endif
 	}
 	
 	return ret;
