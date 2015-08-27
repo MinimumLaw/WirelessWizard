@@ -349,6 +349,7 @@
       <Value>TAL_TYPE=AT86RF212B</Value>
       <Value>DISABLE_TSTAMP_IRQ=1</Value>
       <Value>PAL_USE_SPI_TRX=1</Value>
+      <Value>PROMISCUOUS_MODE</Value>
     </ListValues>
   </avrgcc.compiler.symbols.DefSymbols>
   <avrgcc.compiler.directories.IncludePaths>

@@ -98,7 +98,7 @@ void init_default_pib(void)
 
 	/*Enable Promiscuous Mode pib attribute to put the transceiver in RX_ON mode.*/
 #ifdef PROMISCUOUS_MODE
-	tal_rxaack_prom_mode_ctrl(true);
+	tal_rxaack_prom_mode_ctrl(wdev->promisc_mode);
 	tal_pib_set(macPromiscuousMode, (pib_value_t *)&wdev->promisc_mode);
 #endif
 }

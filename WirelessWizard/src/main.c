@@ -374,6 +374,7 @@ void promisc_mode_callback(void);
 
 void promisc_mode_callback(void) {
 	wdev->promisc_mode = promisc_mode ? true : false;
+	tal_rxaack_prom_mode_ctrl(wdev->promisc_mode);
 	tal_pib_set(macPromiscuousMode, (pib_value_t *)&wdev->promisc_mode);
 }
 #endif
