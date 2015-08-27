@@ -10,6 +10,7 @@
 #define _INCLUDE_WPAN_USB_H_
 
 #define _DUMP_SKB_AND_URB_
+#define _USE_PROMISC_MODE_
 
 /*
  * USB WPAN device config and features

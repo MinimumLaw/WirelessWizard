@@ -6,6 +6,8 @@
  *		Alex A. Mihaylov AKA MinimumLaw <minimumlaw@rambler.ru>
  ****************************************************************************/
 
+#define DEBUG 1
+
 /* kernel module (driver) specific */
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -195,7 +197,7 @@ static int wpan_usb_start(struct ieee802154_hw *wpan_hw)
 
 	ret = usb_submit_urb(dev->inp_urb, GFP_KERNEL);
 
-	dev_dbg(&iface->dev,"interface up\n");
+	dev_dbg(&iface->dev,"interface up (%d)\n", ret);
 
 	return ret;
 }
@@ -241,7 +243,7 @@ static void usb_write_cb(struct urb *urb)
 	usb_free_coherent(urb->dev, urb->transfer_buffer_length,
 			urb->transfer_buffer, urb->transfer_dma);
 
-	dev_err(&iface->dev,"Transfer done!");
+	dev_dbg(&iface->dev,"Transfer done!");
 }
 
 /* xmit: Handler that 802.15.4 module calls for each transmitted frame.
@@ -385,6 +387,9 @@ static int wpan_usb_set_channel(struct ieee802154_hw *wpan_hw,
 		dev_err(&iface->dev,"Error set WPAN device channel!");
 		return -ENOTSUPP;
 	};
+
+	dev_dbg(&iface->dev,"PHY: page %d, chan: %d\n", page, channel);
+
 	return 0;
 }
 
@@ -415,7 +420,7 @@ static int wpan_usb_set_hw_addr_filt(struct ieee802154_hw *wpan_hw,
 				" filter to WPAN device!\n");
 			return -ENOTSUPP;
 		};
-		dev_err(&iface->dev,"SADDR: 0x%04X\n", filt->short_addr);
+		dev_dbg(&iface->dev,"SADDR: 0x%04X\n", filt->short_addr);
 	}
 
 	if (changed & IEEE802154_AFILT_PANID_CHANGED) {
@@ -432,7 +437,7 @@ static int wpan_usb_set_hw_addr_filt(struct ieee802154_hw *wpan_hw,
 				" filter to WPAN device!\n");
 			return -ENOTSUPP;
 		};
-		dev_err(&iface->dev,"PAN_ID: 0x%04X\n", filt->pan_id);
+		dev_dbg(&iface->dev,"PAN_ID: 0x%04X\n", filt->pan_id);
 	}
 
 	if (changed & IEEE802154_AFILT_PANC_CHANGED) {
@@ -449,7 +454,7 @@ static int wpan_usb_set_hw_addr_filt(struct ieee802154_hw *wpan_hw,
 				" filter to WPAN device!\n");
 			return -ENOTSUPP;
 		};
-		dev_err(&iface->dev,"PANC: %d\n", filt->pan_coord);
+		dev_dbg(&iface->dev,"Coord: %d\n", filt->pan_coord);
 	}
 
 	if (changed & IEEE802154_AFILT_IEEEADDR_CHANGED) {
@@ -466,7 +471,7 @@ static int wpan_usb_set_hw_addr_filt(struct ieee802154_hw *wpan_hw,
 				" filter to WPAN device!\n");
 			return -ENOTSUPP;
 		};
-		dev_err(&iface->dev,"MAC: 0x%llx\n", filt->ieee_addr);
+		dev_dbg(&iface->dev,"MAC: 0x%llx\n", filt->ieee_addr);
 	}
 
 	return 0;
@@ -496,6 +501,9 @@ static int wpan_usb_set_txpower(struct ieee802154_hw *wpan_hw, int db)
 			" transmitt power!\n");
 		return -ENOTSUPP;
 	};
+
+	dev_dbg(&iface->dev,"PWR: s%d = r%d\n", power, db);
+
 	return 0;
 }
 
@@ -523,6 +531,9 @@ static int wpan_usb_set_lbt(struct ieee802154_hw *wpan_hw, bool on)
 			"Error set WPAN device listen before talk mode!\n");
 		return -ENOTSUPP;
 	};
+
+	dev_dbg(&iface->dev,"LBT: %d\n", (uint8_t)on);
+
 	return 0;
 }
 
@@ -573,6 +584,9 @@ static int wpan_usb_set_cca_mode(struct ieee802154_hw *wpan_hw,
 		dev_err(&iface->dev, "Error set WPAN device CCA mode!\n");
 		return -ENOTSUPP;
 	};
+
+	dev_dbg(&iface->dev,"CCA: %d\n", wcca);
+
 	return 0;
 }
 
@@ -601,6 +615,9 @@ static int wpan_usb_set_cca_ed_level(struct ieee802154_hw *wpan_hw,
 		dev_err(&iface->dev, "Error set WPAN device CCA ED level!\n");
 		return -ENOTSUPP;
 	};
+
+	dev_dbg(&iface->dev,"ED: %d\n", level);
+
 	return 0;
 }
 
@@ -657,6 +674,8 @@ static int wpan_usb_set_csma_params(struct ieee802154_hw *wpan_hw,
 		return -ENOTSUPP;
 	};
 
+	dev_dbg(&iface->dev,"CSMA: min:%d,max:%d,b:%d\n", min_be, max_be, retries);
+
 	return 0;
 }
 
@@ -685,6 +704,9 @@ static int wpan_usb_set_frame_retries(struct ieee802154_hw *wpan_hw,
 			" frame retries number!\n");
 		return -ENOTSUPP;
 	};
+
+	dev_dbg(&iface->dev,"RET: %d\n", retries);
+
 	return 0;
 }
 
@@ -715,6 +737,9 @@ static int wpan_usb_set_promisc(struct ieee802154_hw *wpan_hw,
 			" promiscous mode!\n");
 		return -ENOTSUPP;
 	};
+
+	dev_dbg(&iface->dev,"PROM: %d\n", (uint8_t)on);
+
 	return 0;
 }
 
@@ -819,7 +844,7 @@ static int pcrm_usb_feature_detect(struct ieee802154_hw *wpan_hw)
 		HZ);			/* tOut */
 
 	dev_dbg(&iface->dev,"Debug channel_supported (%d) size=%d\n",
-	    ret, (int)sizeof(wpan_hw->phy->channels_supported));
+		ret, (int)sizeof(wpan_hw->phy->channels_supported));
 
 	if (ret<0)
 	    return ret;
