@@ -299,7 +299,7 @@ void short_address_callback(void);
 void short_address_callback(void)
 {
 	wdev->short_addr = short_addr;
-	tal_pib_set(macPANId, (pib_value_t *)&wdev->short_addr);
+	tal_pib_set(macShortAddress, (pib_value_t *)&wdev->short_addr);
 }
 
 static uint8_t tx_power;
